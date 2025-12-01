@@ -1,0 +1,6 @@
+{
+  "/icon.png/route": "app/icon.png/route.js",
+  "/business-profile/page": "app/business-profile/page.js",
+  "/login/page": "app/login/page.js",
+  "/profile/page": "app/profile/page.js"
+}
