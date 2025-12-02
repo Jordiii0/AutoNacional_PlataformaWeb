@@ -1,4 +1,4 @@
-// File: C:\Users\ignja\Downloads\comprautos-feature-add-graficos\comprautos-feature-add-graficos\app\profile\page.tsx
+// File: C:\Users\ignja\Documents\semestre 8\Proyecto de Titulo\AutoNacional\app\profile\page.tsx
 import * as entry from '../../../../app/profile/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
