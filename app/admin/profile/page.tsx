@@ -16,6 +16,7 @@ import {
   CheckCircle,
   XCircle,
   Flag,
+  RefreshCw,
 } from "lucide-react";
 
 interface Stats {
@@ -41,9 +42,8 @@ export default function AdminProfilePage() {
   const [recentUsers, setRecentUsers] = useState<any[]>([]);
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
 
-  // ✅ Control de caché
   const lastLoadTime = useRef<number>(0);
-  const CACHE_DURATION = 30000; // 30 segundos
+  const CACHE_DURATION = 30000;
 
   useEffect(() => {
     checkAdminAccess();
@@ -51,60 +51,46 @@ export default function AdminProfilePage() {
 
   const checkAdminAccess = async () => {
     try {
-      console.log("🔍 Verificando acceso de administrador...");
-
       const {
         data: { session: authSession },
       } = await supabase.auth.getSession();
 
       if (!authSession) {
-        console.log("❌ No hay sesión");
         router.push("/login");
         return;
       }
 
-      // Verificar si es administrador
       const { data: userData, error } = await supabase
         .from("usuario")
         .select("rol")
-        .eq("id", authSession.user.id) 
+        .eq("id", authSession.user.id)
         .single();
 
       if (error || !userData || userData.rol !== "administrador") {
-        console.log("❌ No es administrador, redirigiendo...");
         router.push("/login");
         return;
       }
 
-      console.log("✅ Administrador verificado");
       setSession(authSession);
-
-      // ✅ Cargar todos los datos en paralelo
       await loadAllData();
       setLoading(false);
     } catch (error: any) {
-      console.error("❌ Error en checkAdminAccess:", error);
+      console.error("Error en checkAdminAccess:", error);
       router.push("/login");
     }
   };
 
-  // ✅ Función unificada para cargar todo en paralelo
   const loadAllData = async () => {
     try {
       const now = Date.now();
 
-      // Usar caché si los datos son recientes
       if (
         now - lastLoadTime.current < CACHE_DURATION &&
         recentVehicles.length > 0
       ) {
-        console.log("📦 Usando datos en caché");
         return;
       }
 
-      console.log("📥 Cargando todos los datos...");
-
-      // ✅ Promise.all para ejecutar en paralelo
       const [statsData, recentData, reportsData] = await Promise.all([
         loadStatsData(),
         loadRecentDataParallel(),
@@ -117,16 +103,13 @@ export default function AdminProfilePage() {
       setPendingReportsCount(reportsData);
 
       lastLoadTime.current = now;
-      console.log("✅ Datos cargados exitosamente");
     } catch (error) {
-      console.error("❌ Error cargando datos:", error);
+      console.error("Error cargando datos:", error);
     }
   };
 
-  // ✅ Retorna datos en lugar de setearlos
   const loadStatsData = async () => {
     try {
-      // ✅ Todas las queries en paralelo
       const [usersRes, companiesRes, vehiclesRes, activeRes, hiddenRes] =
         await Promise.all([
           supabase.from("usuario").select("*", { count: "exact", head: true }),
@@ -150,7 +133,6 @@ export default function AdminProfilePage() {
         hiddenVehicles: hiddenRes.count || 0,
       };
     } catch (error) {
-      console.error("❌ Error loading stats:", error);
       return {
         totalUsers: 0,
         totalCompanies: 0,
@@ -161,7 +143,6 @@ export default function AdminProfilePage() {
     }
   };
 
-  // ✅ Cargar vehículos y usuarios en paralelo
   const loadRecentDataParallel = async () => {
     try {
       const [vehiclesRes, usersRes] = await Promise.all([
@@ -182,28 +163,24 @@ export default function AdminProfilePage() {
         users: usersRes.data || [],
       };
     } catch (error) {
-      console.error("❌ Error loading recent data:", error);
       return { vehicles: [], users: [] };
     }
   };
 
-  // ✅ Retorna datos en lugar de setear
   const loadPendingReportsCountData = async () => {
     try {
       const { count, error } = await supabase
-        .from("reporte_vehiculo")
+        .from("reporte")
         .select("*", { count: "exact", head: true })
         .eq("estado", "pendiente");
 
       if (error) throw error;
       return count || 0;
     } catch (error) {
-      console.error("❌ Error loading pending reports count:", error);
       return 0;
     }
   };
 
-  // ✅ Actualizar solo el elemento cambiado
   const toggleVehicleVisibility = async (
     vehicleId: number,
     isHidden: boolean
@@ -216,85 +193,40 @@ export default function AdminProfilePage() {
 
       if (error) throw error;
 
-      // ✅ Actualizar lista local sin recargar todo
       setRecentVehicles((prev) =>
-        prev.map((v) =>
-          v.id === vehicleId ? { ...v, oculto: !isHidden } : v
-        )
+        prev.map((v) => (v.id === vehicleId ? { ...v, oculto: !isHidden } : v))
       );
 
-      // Recargar stats solo
       const statsData = await loadStatsData();
       setStats(statsData);
     } catch (error) {
-      console.error("❌ Error toggling visibility:", error);
+      console.error("Error toggling visibility:", error);
     }
   };
 
-  // ✅ Eliminar vehículo optimizado SIN PROMISE.ALL (CORREGIDO)
   const deleteVehicle = async (vehicleId: number) => {
     if (!confirm("¿Estás seguro de eliminar este vehículo?")) return;
 
     try {
-      console.log("🗑️ Eliminando vehículo ID:", vehicleId);
-
-      // ✅ PASO 1: Obtener imágenes
-      const { data: images, error: imagesError } = await supabase
+      const { data: images } = await supabase
         .from("imagen_vehiculo")
         .select("url_imagen")
         .eq("vehiculo_id", vehicleId);
 
-      if (imagesError) throw imagesError;
-
-      // ✅ PASO 2: Eliminar imágenes del storage
       if (images && images.length > 0) {
         const filePaths = images.map((img) => img.url_imagen);
-        const { error: storageError } = await supabase.storage
-          .from("vehiculo_imagen")
-          .remove(filePaths);
-
-        if (storageError) {
-          console.warn("⚠️ Error eliminando del storage:", storageError);
-        }
+        await supabase.storage.from("vehiculo_imagen").remove(filePaths);
       }
 
-      // ✅ PASO 3: Eliminar registros de imagen_vehiculo
-      const { error: deleteImagesError } = await supabase
-        .from("imagen_vehiculo")
-        .delete()
-        .eq("vehiculo_id", vehicleId);
+      await supabase.from("imagen_vehiculo").delete().eq("vehiculo_id", vehicleId);
+      await supabase.from("usuario_vehiculo").delete().eq("vehiculo_id", vehicleId);
+      await supabase.from("vehiculo").delete().eq("id", vehicleId);
 
-      if (deleteImagesError) throw deleteImagesError;
-      console.log("✅ Imágenes eliminadas");
-
-      // ✅ PASO 4: Eliminar registros de usuario_vehiculo
-      const { error: deleteUserVehicleError } = await supabase
-        .from("usuario_vehiculo")
-        .delete()
-        .eq("vehiculo_id", vehicleId);
-
-      if (deleteUserVehicleError) throw deleteUserVehicleError;
-      console.log("✅ Relaciones usuario-vehículo eliminadas");
-
-      // ✅ PASO 5: Eliminar el vehículo
-      const { error: deleteVehicleError } = await supabase
-        .from("vehiculo")
-        .delete()
-        .eq("id", vehicleId);
-
-      if (deleteVehicleError) throw deleteVehicleError;
-      console.log("✅ Vehículo eliminado");
-
-      // ✅ PASO 6: Actualizar lista local
       setRecentVehicles((prev) => prev.filter((v) => v.id !== vehicleId));
 
-      // ✅ PASO 7: Recargar stats
       const statsData = await loadStatsData();
       setStats(statsData);
-
-      console.log("✅ Proceso de eliminación completado");
     } catch (error: any) {
-      console.error("❌ Error deleting vehicle:", error);
       alert("Error al eliminar el vehículo: " + error.message);
     }
   };
@@ -304,149 +236,160 @@ export default function AdminProfilePage() {
     router.push("/login");
   };
 
-  // ✅ Función para refrescar datos manualmente
   const handleRefresh = async () => {
-    lastLoadTime.current = 0; // Forzar recarga
+    lastLoadTime.current = 0;
     await loadAllData();
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-white animate-spin" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-gray-900 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-xl p-6 mb-6 border border-slate-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="bg-gradient-to-br from-amber-500 to-orange-600 p-3 rounded-xl">
-                <Shield className="w-8 h-8 text-white" />
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Shield className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-white">
-                  Panel de Administrador
+              <div className="min-w-0">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
+                  Panel Admin
                 </h1>
-                <p className="text-slate-400">{session?.user?.email}</p>
+                <p className="text-xs sm:text-sm text-gray-500 truncate">
+                  {session?.user?.email}
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleRefresh}
-                className="flex items-center gap-2 bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm font-medium"
               >
-                🔄 Refrescar
+                <RefreshCw className="w-4 h-4" />
+                <span className="hidden sm:inline">Refrescar</span>
               </button>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm font-medium"
               >
-                <LogOut className="w-5 h-5" />
-                Cerrar Sesión
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Salir</span>
               </button>
             </div>
           </div>
         </div>
+      </header>
 
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Stats Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-xl p-6 text-white">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-2">
-              <Users className="w-8 h-8 opacity-80" />
-              <span className="text-3xl font-bold">{stats.totalUsers}</span>
+              <Users className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats.totalUsers}
+              </span>
             </div>
-            <p className="text-blue-100 font-semibold">Total Usuarios</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600">Usuarios</p>
           </div>
 
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl shadow-xl p-6 text-white">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-2">
-              <Building2 className="w-8 h-8 opacity-80" />
-              <span className="text-3xl font-bold">{stats.totalCompanies}</span>
+              <Building2 className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats.totalCompanies}
+              </span>
             </div>
-            <p className="text-purple-100 font-semibold">Total Empresas</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600">Empresas</p>
           </div>
 
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-xl p-6 text-white">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-2">
-              <Car className="w-8 h-8 opacity-80" />
-              <span className="text-3xl font-bold">{stats.totalVehicles}</span>
+              <Car className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats.totalVehicles}
+              </span>
             </div>
-            <p className="text-green-100 font-semibold">Total Vehículos</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600">Vehículos</p>
           </div>
 
-          <div className="bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl shadow-xl p-6 text-white">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-2">
-              <CheckCircle className="w-8 h-8 opacity-80" />
-              <span className="text-3xl font-bold">{stats.activeVehicles}</span>
+              <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-teal-600" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats.activeVehicles}
+              </span>
             </div>
-            <p className="text-teal-100 font-semibold">Activos</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600">Activos</p>
           </div>
 
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-xl p-6 text-white">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-2">
-              <EyeOff className="w-8 h-8 opacity-80" />
-              <span className="text-3xl font-bold">{stats.hiddenVehicles}</span>
+              <EyeOff className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats.hiddenVehicles}
+              </span>
             </div>
-            <p className="text-orange-100 font-semibold">Ocultos</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600">Ocultos</p>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="grid lg:grid-cols-2 gap-4 sm:gap-6 mb-6">
           {/* Vehículos Recientes */}
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-slate-700">
-            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-              <Car className="w-6 h-6 text-blue-400" />
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Car className="w-5 h-5 text-gray-600" />
               Vehículos Recientes
             </h2>
             <div className="space-y-3">
               {recentVehicles.length === 0 ? (
-                <p className="text-slate-400 text-center py-8">
+                <p className="text-gray-500 text-center py-8 text-sm">
                   No hay vehículos registrados
                 </p>
               ) : (
                 recentVehicles.map((vehicle) => (
                   <div
                     key={vehicle.id}
-                    className="bg-slate-700/50 rounded-lg p-4 flex items-center justify-between"
+                    className="bg-gray-50 rounded-lg p-3 sm:p-4 flex items-start sm:items-center justify-between gap-3"
                   >
-                    <div>
-                      <h3 className="text-white font-semibold">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
                         {vehicle.marca} {vehicle.modelo}
                       </h3>
-                      <p className="text-sm text-slate-400">
-                        Año: {vehicle.anio} • $
-                        {vehicle.precio?.toLocaleString() || "N/A"}
+                      <p className="text-xs sm:text-sm text-gray-600">
+                        {vehicle.anio} • ${vehicle.precio?.toLocaleString() || "N/A"}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={() =>
                           toggleVehicleVisibility(vehicle.id, vehicle.oculto)
                         }
                         className={`p-2 rounded-lg transition-colors ${
                           vehicle.oculto
-                            ? "bg-yellow-600 hover:bg-yellow-700"
-                            : "bg-green-600 hover:bg-green-700"
+                            ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200"
+                            : "bg-green-100 text-green-700 hover:bg-green-200"
                         }`}
-                        title={vehicle.oculto ? "Mostrar" : "Ocultar"}
                       >
                         {vehicle.oculto ? (
-                          <EyeOff className="w-5 h-5 text-white" />
+                          <EyeOff className="w-4 h-4" />
                         ) : (
-                          <Eye className="w-5 h-5 text-white" />
+                          <Eye className="w-4 h-4" />
                         )}
                       </button>
                       <button
                         onClick={() => deleteVehicle(vehicle.id)}
-                        className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
-                        title="Eliminar"
+                        className="p-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors"
                       >
-                        <Trash2 className="w-5 h-5 text-white" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -456,34 +399,34 @@ export default function AdminProfilePage() {
           </div>
 
           {/* Usuarios Recientes */}
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-slate-700">
-            <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
-              <Users className="w-6 h-6 text-purple-400" />
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <Users className="w-5 h-5 text-gray-600" />
               Usuarios Recientes
             </h2>
             <div className="space-y-3">
               {recentUsers.length === 0 ? (
-                <p className="text-slate-400 text-center py-8">
+                <p className="text-gray-500 text-center py-8 text-sm">
                   No hay usuarios registrados
                 </p>
               ) : (
                 recentUsers.map((usr) => (
-                  <div key={usr.id} className="bg-slate-700/50 rounded-lg p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-white font-semibold">
+                  <div key={usr.id} className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate">
                           {usr.nombre} {usr.apellido}
                         </h3>
-                        <p className="text-sm text-slate-400">RUT: {usr.rut}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-gray-600">RUT: {usr.rut}</p>
+                        <p className="text-xs text-gray-500 truncate">
                           {usr.correo_electronico}
                         </p>
                       </div>
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        className={`px-2 py-1 rounded-md text-xs font-semibold flex-shrink-0 ${
                           usr.rol === "administrador"
-                            ? "bg-amber-600 text-white"
-                            : "bg-blue-600 text-white"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-blue-100 text-blue-700"
                         }`}
                       >
                         {usr.rol}
@@ -497,68 +440,68 @@ export default function AdminProfilePage() {
         </div>
 
         {/* Acciones Rápidas */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-slate-700 mt-6">
-          <h2 className="text-2xl font-bold text-white mb-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4">
             Acciones Rápidas
           </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <button
               onClick={() => router.push("/admin/users")}
-              className="bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl transition-colors flex flex-col items-center justify-center gap-2 font-semibold"
+              className="bg-blue-600 hover:bg-blue-700 text-white p-3 sm:p-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-2 text-center"
             >
               <Users className="w-5 h-5" />
-              Gestionar Usuarios
+              <span className="text-xs sm:text-sm font-semibold">Usuarios</span>
             </button>
 
             <button
               onClick={() => router.push("/admin/vehicles")}
-              className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-xl transition-colors flex flex-col items-center justify-center gap-2 font-semibold"
+              className="bg-green-600 hover:bg-green-700 text-white p-3 sm:p-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-2 text-center"
             >
               <Car className="w-5 h-5" />
-              Gestionar Vehículos
+              <span className="text-xs sm:text-sm font-semibold">Vehículos</span>
             </button>
 
             <button
               onClick={() => router.push("/admin/companies")}
-              className="bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-xl transition-colors flex flex-col items-center justify-center gap-2 font-semibold"
+              className="bg-purple-600 hover:bg-purple-700 text-white p-3 sm:p-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-2 text-center"
             >
               <Building2 className="w-5 h-5" />
-              Gestionar Empresas
+              <span className="text-xs sm:text-sm font-semibold">Empresas</span>
             </button>
 
             <button
               onClick={() => router.push("/admin/validation")}
-              className="bg-amber-600 hover:bg-amber-700 text-white p-4 rounded-xl transition-colors flex flex-col items-center justify-center gap-2 font-semibold"
+              className="bg-amber-600 hover:bg-amber-700 text-white p-3 sm:p-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-2 text-center"
             >
               <Shield className="w-5 h-5" />
-              Validación
+              <span className="text-xs sm:text-sm font-semibold">Validación</span>
             </button>
 
             <button
               onClick={() => router.push("/admin/rejected")}
-              className="bg-rose-600 hover:bg-rose-700 text-white p-4 rounded-xl transition-colors flex flex-col items-center justify-center gap-2 font-semibold"
+              className="bg-rose-600 hover:bg-rose-700 text-white p-3 sm:p-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-2 text-center"
             >
               <XCircle className="w-5 h-5" />
-              Rechazadas
+              <span className="text-xs sm:text-sm font-semibold">Rechazadas</span>
             </button>
 
             <div className="relative">
               <button
                 onClick={() => router.push("/admin/reports")}
-                className="w-full bg-red-600 hover:bg-red-700 text-white p-4 rounded-xl transition-colors flex flex-col items-center justify-center gap-2 font-semibold"
+                className="w-full bg-red-600 hover:bg-red-700 text-white p-3 sm:p-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-2 text-center"
               >
                 <Flag className="w-5 h-5" />
-                Reportes
+                <span className="text-xs sm:text-sm font-semibold">Reportes</span>
               </button>
               {pendingReportsCount > 0 && (
-                <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-slate-800 shadow-lg">
+                <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center shadow-lg">
                   {pendingReportsCount > 9 ? "9+" : pendingReportsCount}
                 </div>
               )}
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
