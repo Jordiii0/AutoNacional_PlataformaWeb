@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { User } from "@supabase/supabase-js"; // Importamos el tipo User
 import {
   Car,
   Plus,
@@ -21,6 +22,7 @@ import {
   Heart,
 } from "lucide-react";
 
+// Interfaces definidas para evitar 'any'
 interface VehiclePublication {
   id: number;
   precio: number;
@@ -41,11 +43,18 @@ interface VehiclePublication {
   };
 }
 
+// Tipo extendido para incluir imágenes procesadas
+interface VehicleWithImages extends VehiclePublication {
+  images: string[];
+}
+
 const VehicleImageComponent = ({ src, alt }: { src: string; alt: string }) => {
   const [imageUrl, setImageUrl] = useState<string>("");
   const [imgLoading, setImgLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     if (!src) {
       setImgLoading(false);
       return;
@@ -57,11 +66,15 @@ const VehicleImageComponent = ({ src, alt }: { src: string; alt: string }) => {
       return;
     }
 
-    const publicUrl = supabase.storage.from("vehiculo_imagen").getPublicUrl(src)
-      .data.publicUrl;
+    // Obtener URL pública
+    const { data } = supabase.storage.from("vehiculo_imagen").getPublicUrl(src);
+    
+    if (isMounted) {
+        setImageUrl(data.publicUrl);
+        setImgLoading(false);
+    }
 
-    setImageUrl(publicUrl);
-    setImgLoading(false);
+    return () => { isMounted = false; };
   }, [src]);
 
   if (imgLoading) {
@@ -73,11 +86,12 @@ const VehicleImageComponent = ({ src, alt }: { src: string; alt: string }) => {
   }
 
   return (
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={imageUrl}
       alt={alt}
       className="w-full h-full object-cover"
-      onError={(e) => {
+      onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
         e.currentTarget.src =
           'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"%3E%3Cpath fill="%23999" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/%3E%3C/svg%3E';
       }}
@@ -88,41 +102,34 @@ const VehicleImageComponent = ({ src, alt }: { src: string; alt: string }) => {
 export default function ComparePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [vehicles, setVehicles] = useState<
-    (VehiclePublication & { images: string[] })[]
-  >([]);
+  
+  // Estado tipado correctamente
+  const [vehicles, setVehicles] = useState<VehicleWithImages[]>([]);
   const [favorites, setFavorites] = useState<number[]>([]);
-  const [user, setUser] = useState<any>(null);
-  const [selectedVehicles, setSelectedVehicles] = useState<
-    ((VehiclePublication & { images: string[] }) | null)[]
-  >([null, null, null]);
+  const [user, setUser] = useState<User | null>(null); // Uso del tipo User de Supabase
+  
+  const [selectedVehicles, setSelectedVehicles] = useState<(VehicleWithImages | null)[]>([null, null, null]);
   const [showSelector, setShowSelector] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"all" | "favorites">("all");
 
-  useEffect(() => {
-    loadData();
+  // Definir funciones antes de usarlas en useEffect para incluirlas en dependencias
+
+  const loadFavorites = useCallback(async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("favorito")
+        .select("vehiculo_id")
+        .eq("usuario_id", userId);
+
+      if (error) throw error;
+      setFavorites((data || []).map((fav) => fav.vehiculo_id));
+    } catch (error: unknown) {
+      console.error("Error loading favorites:", error);
+    }
   }, []);
 
-  const loadData = async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session) {
-        setUser(session.user);
-        await loadFavorites(session.user.id);
-      }
-
-      await loadVehicles();
-    } catch (error: any) {
-      console.error("Error loading data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadVehicles = async () => {
+  const loadVehicles = useCallback(async () => {
     try {
       const { data: vehiclesData, error: vehiclesError } = await supabase
         .from("vehiculo")
@@ -150,6 +157,7 @@ export default function ComparePage() {
         return acc;
       }, {} as Record<number, string>);
 
+      // Procesamiento de imágenes en paralelo
       const vehiclesWithImages = await Promise.all(
         vehiclesData.map(async (vehicle) => {
           const { data: imagesData } = await supabase
@@ -173,33 +181,42 @@ export default function ComparePage() {
               nombre_combustible:
                 combustiblesMap[vehicle.tipo_combustible_id] || "Desconocido",
             },
-          };
+          } as VehicleWithImages;
         })
       );
 
-      setVehicles(vehiclesWithImages as any);
-    } catch (error: any) {
+      setVehicles(vehiclesWithImages);
+    } catch (error: unknown) {
       console.error("Error en loadVehicles:", error);
       setVehicles([]);
     }
-  };
+  }, []);
 
-  const loadFavorites = async (userId: string) => {
+  const loadData = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("favorito")
-        .select("vehiculo_id")
-        .eq("usuario_id", userId);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      
+      if (session) {
+        setUser(session.user);
+        await loadFavorites(session.user.id);
+      }
 
-      if (error) throw error;
-      setFavorites((data || []).map((fav) => fav.vehiculo_id));
-    } catch (error: any) {
-      console.error("Error loading favorites:", error);
+      await loadVehicles();
+    } catch (error: unknown) {
+      console.error("Error loading data:", error);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [loadFavorites, loadVehicles]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]); // Dependencia corregida
 
   const selectVehicle = (
-    vehicle: VehiclePublication & { images: string[] },
+    vehicle: VehicleWithImages,
     index: number
   ) => {
     const newSelected = [...selectedVehicles];
@@ -236,7 +253,7 @@ export default function ComparePage() {
 
   const getComparisonValue = (
     attr: string,
-    vehicle: (VehiclePublication & { images: string[] }) | null
+    vehicle: VehicleWithImages | null
   ) => {
     if (!vehicle) return "-";
 
@@ -277,7 +294,7 @@ export default function ComparePage() {
             return null;
         }
       })
-      .filter((v) => v !== null);
+      .filter((v): v is number => v !== null); // Type predicate
 
     if (values.length < 2) return "";
 
@@ -304,8 +321,8 @@ export default function ComparePage() {
         return "";
     }
 
-    const min = Math.min(...(values as number[]));
-    const max = Math.max(...(values as number[]));
+    const min = Math.min(...values);
+    const max = Math.max(...values);
 
     if (attr === "precio" || attr === "kilometraje") {
       return current === min ? "bg-green-50 border-green-200" : "";

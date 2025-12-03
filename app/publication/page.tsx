@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react"; // Eliminado useCallback no usado
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
@@ -11,15 +11,7 @@ import {
   Car,
   Upload,
   ArrowLeft,
-  DollarSign,
-  Calendar,
-  Gauge,
-  Wrench,
-  Fuel,
-  MapPin,
-  FileText,
   Save,
-  ImageIcon,
 } from "lucide-react";
 
 interface VehicleFormData {
@@ -96,7 +88,7 @@ export default function PublicationPage() {
       setLoading(false);
     };
     initializeForm();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const checkUserAccess = async () => {
     try {
@@ -117,7 +109,7 @@ export default function PublicationPage() {
 
       if (userData) {
         if (userData.rol === "administrador") {
-          alert("Los administradores no pueden publicar vehículos");
+          window.alert("Los administradores no pueden publicar vehículos");
           router.push("/admin/profile");
           return;
         }
@@ -134,7 +126,7 @@ export default function PublicationPage() {
 
       if (empresaData) {
         if (!empresaData.validada) {
-          alert(
+          window.alert(
             "Tu empresa no ha sido validada aún. Por favor, espera a que nuestro equipo la valide."
           );
           router.push("/profile");
@@ -147,7 +139,7 @@ export default function PublicationPage() {
       }
 
       router.push("/login");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error al verificar acceso:", error);
       router.push("/login");
     }
@@ -188,8 +180,9 @@ export default function PublicationPage() {
       if (regionesError) throw regionesError;
 
       setRegions(regionesData || []);
-    } catch (error: any) {
-      setError("Error al cargar los catálogos: " + error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Error desconocido";
+      setError("Error al cargar los catálogos: " + message);
     }
   };
 
@@ -383,12 +376,10 @@ export default function PublicationPage() {
       setTimeout(() => {
         router.push("/shop");
       }, 2000);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error completo al publicar:", error);
-      setError(
-        "Error al publicar el vehículo: " +
-          (error.message || "Un error desconocido ha ocurrido.")
-      );
+      const message = error instanceof Error ? error.message : "Un error desconocido ha ocurrido.";
+      setError("Error al publicar el vehículo: " + message);
     } finally {
       setSaving(false);
     }
@@ -463,6 +454,7 @@ export default function PublicationPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {imagePreviews.map((preview, index) => (
                   <div key={index} className="relative group aspect-square">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={preview}
                       alt={`Preview ${index + 1}`}

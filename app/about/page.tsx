@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Zap, Shield, Users, Target, Leaf, Heart } from "lucide-react";
+import { Zap, Shield,Target, Leaf, Heart } from "lucide-react";
 
 export default function AboutUs() {
   return (

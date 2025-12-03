@@ -19,8 +19,7 @@ import {
   Car,
   Calendar,
   AlertCircle,
-  CheckCircle2,
-  X,
+  CheckCircle2
 } from "lucide-react";
 
 interface Report {

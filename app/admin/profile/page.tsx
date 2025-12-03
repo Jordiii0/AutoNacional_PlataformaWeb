@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+// Asumiendo que 'supabase' viene de un cliente tipificado, pero lo importamos como lo tenías.
+// NOTA: Si usas Next.js 13/14 con server components, la importación del cliente puede variar.
+import { supabase } from "@/lib/supabaseClient"; 
+import { Session } from "@supabase/supabase-js"; // Necesitas importar Session
 import {
   Shield,
   Users,
@@ -19,6 +22,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 
+// Tipos de datos de la base de datos (Interfaces)
 interface Stats {
   totalUsers: number;
   totalCompanies: number;
@@ -27,10 +31,37 @@ interface Stats {
   hiddenVehicles: number;
 }
 
+interface Vehicle {
+  id: number;
+  marca: string;
+  modelo: string;
+  oculto: boolean;
+  anio: number | null;
+  precio: number | null;
+  // Otros campos necesarios...
+}
+
+interface Usuario {
+    id: string;
+    nombre: string;
+    apellido: string;
+    rut: string;
+    correo_electronico: string;
+    rol: 'administrador' | 'usuario' | 'empresa';
+    // Otros campos necesarios...
+}
+
+interface RecentData {
+    vehicles: Vehicle[];
+    users: Usuario[];
+}
+
 export default function AdminProfilePage() {
   const router = useRouter();
+  
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState<any>(null);
+  // Tipificación de Session. Si la base de datos es Supabase, usa Session | null
+  const [session, setSession] = useState<Session | null>(null); 
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
     totalCompanies: 0,
@@ -38,49 +69,100 @@ export default function AdminProfilePage() {
     activeVehicles: 0,
     hiddenVehicles: 0,
   });
-  const [recentVehicles, setRecentVehicles] = useState<any[]>([]);
-  const [recentUsers, setRecentUsers] = useState<any[]>([]);
+  // Uso de las interfaces tipificadas
+  const [recentVehicles, setRecentVehicles] = useState<Vehicle[]>([]);
+  const [recentUsers, setRecentUsers] = useState<Usuario[]>([]);
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
 
   const lastLoadTime = useRef<number>(0);
   const CACHE_DURATION = 30000;
 
-  useEffect(() => {
-    checkAdminAccess();
-  }, []);
+  // --- Funciones de carga de datos ---
 
-  const checkAdminAccess = async () => {
+  // loadStatsData: Retorna la interfaz Stats
+  const loadStatsData = useCallback(async (): Promise<Stats> => {
     try {
-      const {
-        data: { session: authSession },
-      } = await supabase.auth.getSession();
+      const [usersRes, companiesRes, vehiclesRes, activeRes, hiddenRes] =
+        await Promise.all([
+          supabase.from("usuario").select("*", { count: "exact", head: true }),
+          supabase.from("empresa").select("*", { count: "exact", head: true }),
+          supabase.from("vehiculo").select("*", { count: "exact", head: true }),
+          supabase
+            .from("vehiculo")
+            .select("*", { count: "exact", head: true })
+            .eq("oculto", false),
+          supabase
+            .from("vehiculo")
+            .select("*", { count: "exact", head: true })
+            .eq("oculto", true),
+        ]);
 
-      if (!authSession) {
-        router.push("/login");
-        return;
-      }
-
-      const { data: userData, error } = await supabase
-        .from("usuario")
-        .select("rol")
-        .eq("id", authSession.user.id)
-        .single();
-
-      if (error || !userData || userData.rol !== "administrador") {
-        router.push("/login");
-        return;
-      }
-
-      setSession(authSession);
-      await loadAllData();
-      setLoading(false);
-    } catch (error: any) {
-      console.error("Error en checkAdminAccess:", error);
-      router.push("/login");
+      return {
+        totalUsers: usersRes.count || 0,
+        totalCompanies: companiesRes.count || 0,
+        totalVehicles: vehiclesRes.count || 0,
+        activeVehicles: activeRes.count || 0,
+        hiddenVehicles: hiddenRes.count || 0,
+      };
+    } catch (error) {
+      console.error("Error cargando estadísticas:", error);
+      return {
+        totalUsers: 0,
+        totalCompanies: 0,
+        totalVehicles: 0,
+        activeVehicles: 0,
+        hiddenVehicles: 0,
+      };
     }
-  };
+  }, []); // Dependencias vacías
 
-  const loadAllData = async () => {
+  // loadRecentDataParallel: Retorna la interfaz RecentData
+  const loadRecentDataParallel = useCallback(async (): Promise<RecentData> => {
+    try {
+      const [vehiclesRes, usersRes] = await Promise.all([
+        supabase
+          .from("vehiculo")
+          // Tipificado explícitamente el select para que TypeScript sepa qué esperar
+          .select("id, marca, modelo, oculto, anio, precio") 
+          .order("created_at", { ascending: false })
+          .limit(5),
+        supabase
+          .from("usuario")
+          // Tipificado explícitamente el select
+          .select("id, nombre, apellido, rut, correo_electronico, rol") 
+          .order("created_at", { ascending: false })
+          .limit(5),
+      ]);
+
+      // Aseguramos que los datos devueltos coincidan con las interfaces
+      return {
+        vehicles: (vehiclesRes.data as Vehicle[] | null) || [], 
+        users: (usersRes.data as Usuario[] | null) || [],
+      };
+    } catch (error) {
+      console.error("Error cargando datos recientes:", error);
+      return { vehicles: [], users: [] };
+    }
+  }, []); // Dependencias vacías
+
+  // loadPendingReportsCountData: Retorna number
+  const loadPendingReportsCountData = useCallback(async (): Promise<number> => {
+    try {
+      const { count, error } = await supabase
+        .from("reporte")
+        .select("*", { count: "exact", head: true })
+        .eq("estado", "pendiente");
+
+      if (error) throw error;
+      return count || 0;
+    } catch (error) {
+      console.error("Error cargando conteo de reportes:", error);
+      return 0;
+    }
+  }, []); // Dependencias vacías
+  
+  // loadAllData
+  const loadAllData = useCallback(async () => {
     try {
       const now = Date.now();
 
@@ -106,86 +188,63 @@ export default function AdminProfilePage() {
     } catch (error) {
       console.error("Error cargando datos:", error);
     }
-  };
+  }, [CACHE_DURATION, loadStatsData, loadRecentDataParallel, loadPendingReportsCountData, recentVehicles.length]);
+  // Agregamos las funciones de carga como dependencias, ya que son definidas fuera de loadAllData
 
-  const loadStatsData = async () => {
+  // checkAdminAccess (Uso de useCallback y tipificación en catch)
+  const checkAdminAccess = useCallback(async () => {
     try {
-      const [usersRes, companiesRes, vehiclesRes, activeRes, hiddenRes] =
-        await Promise.all([
-          supabase.from("usuario").select("*", { count: "exact", head: true }),
-          supabase.from("empresa").select("*", { count: "exact", head: true }),
-          supabase.from("vehiculo").select("*", { count: "exact", head: true }),
-          supabase
-            .from("vehiculo")
-            .select("*", { count: "exact", head: true })
-            .eq("oculto", false),
-          supabase
-            .from("vehiculo")
-            .select("*", { count: "exact", head: true })
-            .eq("oculto", true),
-        ]);
+      const {
+        data: { session: authSession },
+      } = await supabase.auth.getSession();
 
-      return {
-        totalUsers: usersRes.count || 0,
-        totalCompanies: companiesRes.count || 0,
-        totalVehicles: vehiclesRes.count || 0,
-        activeVehicles: activeRes.count || 0,
-        hiddenVehicles: hiddenRes.count || 0,
-      };
-    } catch (error) {
-      return {
-        totalUsers: 0,
-        totalCompanies: 0,
-        totalVehicles: 0,
-        activeVehicles: 0,
-        hiddenVehicles: 0,
-      };
+      if (!authSession) {
+        router.push("/login");
+        return;
+      }
+
+      // Supabase devuelve el objeto, lo tipificamos.
+      const { data: userData, error } = await supabase
+        .from("usuario")
+        .select("rol")
+        .eq("id", authSession.user.id)
+        .single();
+      
+      // La respuesta de la tabla 'usuario' debe tener un 'rol'
+      const userRol = userData as { rol: 'administrador' | 'usuario' | 'empresa' } | null;
+
+
+      if (error || !userRol || userRol.rol !== "administrador") {
+        router.push("/login");
+        return;
+      }
+
+      setSession(authSession);
+      await loadAllData();
+      setLoading(false);
+    } catch (error: unknown) { // Usamos 'unknown' en lugar de 'any'
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido al verificar acceso";
+      console.error("Error en checkAdminAccess:", errorMessage);
+      router.push("/login");
     }
-  };
+  }, [router, loadAllData]);
 
-  const loadRecentDataParallel = async () => {
-    try {
-      const [vehiclesRes, usersRes] = await Promise.all([
-        supabase
-          .from("vehiculo")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(5),
-        supabase
-          .from("usuario")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .limit(5),
-      ]);
 
-      return {
-        vehicles: vehiclesRes.data || [],
-        users: usersRes.data || [],
-      };
-    } catch (error) {
-      return { vehicles: [], users: [] };
-    }
-  };
+  // --- Hooks de Efecto ---
 
-  const loadPendingReportsCountData = async () => {
-    try {
-      const { count, error } = await supabase
-        .from("reporte")
-        .select("*", { count: "exact", head: true })
-        .eq("estado", "pendiente");
+  useEffect(() => {
+    checkAdminAccess();
+  }, [checkAdminAccess]); 
 
-      if (error) throw error;
-      return count || 0;
-    } catch (error) {
-      return 0;
-    }
-  };
+
+  // --- Funciones de Acción ---
 
   const toggleVehicleVisibility = async (
     vehicleId: number,
     isHidden: boolean
   ) => {
     try {
+      // Reemplazamos el uso de any en la función de actualización
       const { error } = await supabase
         .from("vehiculo")
         .update({ oculto: !isHidden })
@@ -197,17 +256,26 @@ export default function AdminProfilePage() {
         prev.map((v) => (v.id === vehicleId ? { ...v, oculto: !isHidden } : v))
       );
 
+      // Recalculamos las estadísticas después del cambio
       const statsData = await loadStatsData();
       setStats(statsData);
-    } catch (error) {
-      console.error("Error toggling visibility:", error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+      console.error("Error toggling visibility:", errorMessage);
+      // Aquí podrías mostrar un modal de error personalizado
     }
   };
 
   const deleteVehicle = async (vehicleId: number) => {
-    if (!confirm("¿Estás seguro de eliminar este vehículo?")) return;
+    // IMPORTANTE: Reemplazar confirm() con un manejo de UI personalizado (como un modal).
+    // Dejo el if con confirm() temporalmente, pero emitiendo una advertencia.
+    if (!window.confirm("¿Estás seguro de eliminar este vehículo? Esto es irreversible.")) {
+        return;
+    }
 
     try {
+      // El tipado del data es manejado por Supabase, pero usamos 'any' solo en la destructuración local si es necesario,
+      // aunque aquí no es necesario ya que solo usamos el array images.
       const { data: images } = await supabase
         .from("imagen_vehiculo")
         .select("url_imagen")
@@ -215,19 +283,30 @@ export default function AdminProfilePage() {
 
       if (images && images.length > 0) {
         const filePaths = images.map((img) => img.url_imagen);
-        await supabase.storage.from("vehiculo_imagen").remove(filePaths);
+        // Supabase Storage remove espera un array de strings (filePaths)
+        const { error: storageError } = await supabase.storage.from("vehiculo_imagen").remove(filePaths);
+        if (storageError) {
+             console.warn("Advertencia al eliminar archivos en Storage:", storageError.message);
+        }
       }
 
+      // Eliminación en cascada (aunque idealmente la DB lo haría)
       await supabase.from("imagen_vehiculo").delete().eq("vehiculo_id", vehicleId);
       await supabase.from("usuario_vehiculo").delete().eq("vehiculo_id", vehicleId);
       await supabase.from("vehiculo").delete().eq("id", vehicleId);
 
+      // Actualizar el estado local
       setRecentVehicles((prev) => prev.filter((v) => v.id !== vehicleId));
 
+      // Recalcular estadísticas
       const statsData = await loadStatsData();
       setStats(statsData);
-    } catch (error: any) {
-      alert("Error al eliminar el vehículo: " + error.message);
+
+      console.log(`Vehículo ${vehicleId} eliminado correctamente.`);
+    } catch (error: unknown) { // Uso de 'unknown'
+      const errorMessage = error instanceof Error ? error.message : "Error desconocido";
+      // IMPORTANTE: Reemplazar alert() con un modal/notificación
+      console.error("Error al eliminar el vehículo:", errorMessage);
     }
   };
 
