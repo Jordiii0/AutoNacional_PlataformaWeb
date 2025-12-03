@@ -21,6 +21,10 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  Building2,
+  User,
+  X,
+  EyeOff,
 } from "lucide-react";
 
 interface Vehicle {
@@ -70,20 +74,16 @@ export default function AdminVehiclesPage() {
   const [saving, setSaving] = useState(false);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterStatus, setFilterStatus] = useState<
-    "all" | "visible" | "hidden"
-  >("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "visible" | "hidden">("all");
   const [modal, setModal] = useState<ModalData>({ type: null, vehicle: null });
   const [error, setError] = useState("");
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  // Caché
   const lastLoadTime = useRef<number>(0);
   const CACHE_DURATION = 30000;
 
   useEffect(() => {
     checkAdmin();
-    // eslint-disable-next-line
   }, []);
 
   const filteredVehicles = useMemo(() => {
@@ -120,7 +120,6 @@ export default function AdminVehiclesPage() {
         data: { session },
       } = await supabase.auth.getSession();
       if (!session) {
-        setError("Sesión no iniciada");
         router.push("/login");
         return;
       }
@@ -130,20 +129,13 @@ export default function AdminVehiclesPage() {
         .eq("id", session.user.id)
         .single();
 
-      if (userError || !userData) {
-        setError("No se pudo cargar el usuario, ¿existe en la tabla usuario?");
-        router.push("/");
-        return;
-      }
-      if ((userData.rol || "").toLowerCase() !== "administrador") {
-        setError("Acceso denegado: no eres administrador");
+      if (userError || !userData || userData.rol !== "administrador") {
         router.push("/");
         return;
       }
       await loadVehicles();
     } catch (error) {
       console.error("Error:", error);
-      setError("Error al verificar acceso");
       router.push("/");
     } finally {
       setLoading(false);
@@ -157,7 +149,6 @@ export default function AdminVehiclesPage() {
         return;
       }
 
-      // Cargar vehículos con información de usuario O empresa
       const { data: vehiculos, error } = await supabase
         .from("vehiculo")
         .select(
@@ -183,7 +174,6 @@ export default function AdminVehiclesPage() {
 
       if (error) throw error;
 
-      // Cargar imágenes para cada vehículo
       const vehiclesWithImages = await Promise.all(
         (vehiculos || []).map(async (v: any) => {
           const { data: imagenes } = await supabase
@@ -191,7 +181,6 @@ export default function AdminVehiclesPage() {
             .select("url_imagen")
             .eq("vehiculo_id", v.id);
 
-          // Determinar si es usuario o empresa
           let dueno_nombre = "No especificado";
           let dueno_correo = "No especificado";
           let dueno_telefono = "No especificado";
@@ -228,7 +217,6 @@ export default function AdminVehiclesPage() {
       setError("Error al cargar vehículos");
       setVehicles([]);
     }
-    // eslint-disable-next-line
   }, [vehicles.length]);
 
   const handleToggleVisibility = useCallback(async (vehicle: Vehicle) => {
@@ -257,82 +245,26 @@ export default function AdminVehiclesPage() {
     if (!modal.vehicle) return;
     setSaving(true);
     try {
-      // 1. Eliminar imágenes del storage si existen
-      if (
-        modal.vehicle.imagen_vehiculo &&
-        modal.vehicle.imagen_vehiculo.length > 0
-      ) {
+      if (modal.vehicle.imagen_vehiculo && modal.vehicle.imagen_vehiculo.length > 0) {
         const filePaths = modal.vehicle.imagen_vehiculo.map((img) => {
           const url = img.url_imagen;
-          const path = url.split(
-            "/storage/v1/object/public/vehiculo_imagen/"
-          )[1];
+          const path = url.split("/storage/v1/object/public/vehiculo_imagen/")[1];
           return path;
         });
-        const { error: storageError } = await supabase.storage
-          .from("vehiculo_imagen")
-          .remove(filePaths);
-        if (storageError) {
-          throw new Error(
-            "Error al eliminar imágenes del storage: " + storageError.message
-          );
-        }
+        await supabase.storage.from("vehiculo_imagen").remove(filePaths);
       }
 
-      // 2. Eliminar registros de imagen_vehiculo
-      const { error: imagenesError } = await supabase
-        .from("imagen_vehiculo")
-        .delete()
-        .eq("vehiculo_id", modal.vehicle.id);
-      if (imagenesError) {
-        throw new Error(
-          "Error al eliminar registros de imagen_vehiculo: " +
-            imagenesError.message
-        );
-      }
-
-      // 3. Eliminar registros de usuario_vehiculo
-      const { error: relError } = await supabase
-        .from("usuario_vehiculo")
-        .delete()
-        .eq("vehiculo_id", modal.vehicle.id);
-      if (relError) {
-        throw new Error(
-          "Error al eliminar usuario_vehiculo: " + relError.message
-        );
-      }
-
-      // 4. Eliminar registros de calificacion
-      const { error: califError } = await supabase
-        .from("calificacion")
-        .delete()
-        .eq("vehiculo_id", modal.vehicle.id);
-      if (califError) {
-        throw new Error(
-          "Error al eliminar calificaciones: " + califError.message
-        );
-      }
-
-      // 5. Eliminar el vehículo
-      const { error: vehiculoError } = await supabase
-        .from("vehiculo")
-        .delete()
-        .eq("id", modal.vehicle.id);
-      if (vehiculoError) {
-        throw new Error(
-          "Error al eliminar el vehículo: " + vehiculoError.message
-        );
-      }
+      await supabase.from("imagen_vehiculo").delete().eq("vehiculo_id", modal.vehicle.id);
+      await supabase.from("usuario_vehiculo").delete().eq("vehiculo_id", modal.vehicle.id);
+      await supabase.from("calificacion").delete().eq("vehiculo_id", modal.vehicle.id);
+      await supabase.from("vehiculo").delete().eq("id", modal.vehicle.id);
 
       setVehicles((prev) => prev.filter((v) => v.id !== modal.vehicle!.id));
       setModal({ type: null, vehicle: null });
       setError("");
     } catch (error: any) {
       console.error("Error deleting vehicle:", error);
-      setError(
-        "Error al eliminar el vehículo: " +
-          (error?.message || JSON.stringify(error))
-      );
+      setError("Error al eliminar el vehículo");
     } finally {
       setSaving(false);
     }
@@ -344,79 +276,99 @@ export default function AdminVehiclesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-white animate-spin" />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-gray-900 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <button
             onClick={() => router.back()}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-4"
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors mb-4"
           >
-            <ArrowLeft className="w-5 h-5" />
-            Volver al Panel
+            <ArrowLeft className="w-4 h-4" />
+            Volver
           </button>
 
-          <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-slate-700">
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-              <Car className="w-8 h-8 text-green-400" />
-              Gestión de Vehículos
-            </h1>
-            <p className="text-slate-400 mt-2">
-              Total: {stats.total} vehículos publicados
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+              <Car className="w-6 h-6 text-gray-700" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Gestión de Vehículos
+              </h1>
+              <p className="text-sm text-gray-500">
+                {stats.total} vehículos publicados
+              </p>
+            </div>
           </div>
         </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {error && (
-          <div className="mb-6 bg-red-900/30 border border-red-500 text-red-200 px-4 py-3 rounded-lg flex items-center gap-2">
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             {error}
           </div>
         )}
-        <div className="grid md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-xl p-6 text-white">
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-2">
-              <Car className="w-8 h-8 opacity-80" />
-              <span className="text-3xl font-bold">{stats.total}</span>
+              <Car className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats.total}
+              </span>
             </div>
-            <p className="text-green-100 font-semibold">Total Vehículos</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600">Total</p>
           </div>
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-xl p-6 text-white">
+
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-2">
-              <CheckCircle className="w-8 h-8 opacity-80" />
-              <span className="text-3xl font-bold">{stats.visible}</span>
+              <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats.visible}
+              </span>
             </div>
-            <p className="text-blue-100 font-semibold">Visibles</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600">Visibles</p>
           </div>
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-xl p-6 text-white">
+
+          <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
             <div className="flex items-center justify-between mb-2">
-              <XCircle className="w-8 h-8 opacity-80" />
-              <span className="text-3xl font-bold">{stats.hidden}</span>
+              <EyeOff className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
+              <span className="text-2xl sm:text-3xl font-bold text-gray-900">
+                {stats.hidden}
+              </span>
             </div>
-            <p className="text-orange-100 font-semibold">Ocultos</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600">Ocultos</p>
           </div>
         </div>
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-slate-700 mb-6">
-          <div className="grid md:grid-cols-2 gap-4">
+
+        {/* Filtros */}
+        <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6">
+          <div className="grid sm:grid-cols-2 gap-3">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Buscar por marca, modelo o dueño..."
-                className="w-full pl-12 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                placeholder="Buscar por marca, modelo..."
+                className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
               />
             </div>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="px-4 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white"
             >
               <option value="all">Todos los vehículos</option>
               <option value="visible">Visibles</option>
@@ -424,14 +376,16 @@ export default function AdminVehiclesPage() {
             </select>
           </div>
         </div>
-        <div className="space-y-4">
+
+        {/* Lista de Vehículos */}
+        <div className="space-y-3">
           {filteredVehicles.length === 0 ? (
-            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-xl p-12 border border-slate-700 text-center">
-              <AlertCircle className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-white mb-2">
+            <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
+              <Car className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 No se encontraron vehículos
               </h3>
-              <p className="text-slate-400">
+              <p className="text-gray-500 text-sm">
                 {filterStatus === "hidden"
                   ? "No hay vehículos ocultos"
                   : "No hay vehículos publicados"}
@@ -441,67 +395,63 @@ export default function AdminVehiclesPage() {
             filteredVehicles.map((vehicle) => (
               <div
                 key={vehicle.id}
-                className="bg-slate-800/50 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-700 overflow-hidden hover:border-green-500 transition-all"
+                className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:border-gray-300 transition-all"
               >
-                {/* Encabezado de la fila */}
+                {/* Header del vehículo */}
                 <div
-                  className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-700/30 transition-colors"
+                  className="p-4 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
                   onClick={() =>
                     setExpandedId(expandedId === vehicle.id ? null : vehicle.id)
                   }
                 >
-                  <div className="flex-1 flex items-center gap-4">
-                    {/* Imagen pequeña */}
-                    <div className="w-20 h-20 bg-slate-700 rounded-lg flex-shrink-0 overflow-hidden">
-                      {vehicle.imagen_vehiculo &&
-                      vehicle.imagen_vehiculo.length > 0 ? (
-                        <img
-                          src={vehicle.imagen_vehiculo[0].url_imagen}
-                          alt={`${vehicle.marca} ${vehicle.modelo}`}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Car className="w-10 h-10 text-slate-500" />
-                        </div>
+                  {/* Imagen */}
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden">
+                    {vehicle.imagen_vehiculo && vehicle.imagen_vehiculo.length > 0 ? (
+                      <img
+                        src={vehicle.imagen_vehiculo[0].url_imagen}
+                        alt={`${vehicle.marca} ${vehicle.modelo}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Car className="w-8 h-8 text-gray-300" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-sm sm:text-base font-bold text-gray-900 truncate">
+                        {vehicle.marca} {vehicle.modelo}
+                      </h3>
+                      {vehicle.oculto && (
+                        <span className="bg-orange-100 text-orange-700 px-2 py-0.5 rounded text-xs font-semibold flex items-center gap-1 flex-shrink-0">
+                          <EyeOff className="w-3 h-3" />
+                          Oculto
+                        </span>
                       )}
                     </div>
-                    {/* Info principal */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-lg font-bold text-white">
-                          {vehicle.marca} {vehicle.modelo}
-                        </h3>
-                        {vehicle.oculto && (
-                          <span className="bg-orange-600 text-white px-2 py-1 rounded text-xs font-semibold flex items-center gap-1">
-                            <XCircle className="w-3 h-3" />
-                            Oculto
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex gap-4 text-sm text-slate-400">
-                        <span>{vehicle.anio}</span>
-                        <span>${vehicle.precio.toLocaleString()}</span>
-                        <span>{vehicle.kilometraje.toLocaleString()} km</span>
-                        <span>
-                          {vehicle.tipo_combustible?.nombre_combustible ||
-                            "N/A"}
-                        </span>
-                      </div>
+                    <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
+                      <span>{vehicle.anio}</span>
+                      <span>${vehicle.precio.toLocaleString()}</span>
+                      <span className="hidden sm:inline">
+                        {vehicle.kilometraje.toLocaleString()} km
+                      </span>
                     </div>
                   </div>
-                  {/* Acciones rápidas */}
-                  <div className="flex items-center gap-2">
+
+                  {/* Acciones Desktop */}
+                  <div className="hidden sm:flex items-center gap-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setModal({ type: "view", vehicle });
                       }}
-                      disabled={saving}
-                      className="p-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50"
+                      className="p-2 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors"
                       title="Ver detalles"
                     >
-                      <Eye className="w-5 h-5 text-white" />
+                      <Eye className="w-4 h-4" />
                     </button>
                     <button
                       onClick={(e) => {
@@ -511,15 +461,15 @@ export default function AdminVehiclesPage() {
                       disabled={saving}
                       className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
                         vehicle.oculto
-                          ? "bg-green-600 hover:bg-green-700"
-                          : "bg-orange-600 hover:bg-orange-700"
+                          ? "bg-green-100 text-green-700 hover:bg-green-200"
+                          : "bg-orange-100 text-orange-700 hover:bg-orange-200"
                       }`}
                       title={vehicle.oculto ? "Mostrar" : "Ocultar"}
                     >
                       {vehicle.oculto ? (
-                        <CheckCircle className="w-5 h-5 text-white" />
+                        <Eye className="w-4 h-4" />
                       ) : (
-                        <XCircle className="w-5 h-5 text-white" />
+                        <EyeOff className="w-4 h-4" />
                       )}
                     </button>
                     <button
@@ -528,20 +478,12 @@ export default function AdminVehiclesPage() {
                         setModal({ type: "delete", vehicle });
                       }}
                       disabled={saving}
-                      className="p-2 bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
+                      className="p-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors disabled:opacity-50"
                       title="Eliminar"
                     >
-                      <Trash2 className="w-5 h-5 text-white" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setExpandedId(
-                          expandedId === vehicle.id ? null : vehicle.id
-                        );
-                      }}
-                      className="p-2 text-slate-400 hover:text-white transition-colors"
-                    >
+                    <button className="p-2 text-gray-400 hover:text-gray-600">
                       {expandedId === vehicle.id ? (
                         <ChevronUp className="w-5 h-5" />
                       ) : (
@@ -549,108 +491,126 @@ export default function AdminVehiclesPage() {
                       )}
                     </button>
                   </div>
+
+                  {/* Toggle Mobile */}
+                  <button className="sm:hidden p-2 text-gray-400">
+                    {expandedId === vehicle.id ? (
+                      <ChevronUp className="w-5 h-5" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5" />
+                    )}
+                  </button>
                 </div>
-                {/* Detalles expandibles */}
+
+                {/* Detalles expandidos */}
                 {expandedId === vehicle.id && (
-                  <div className="border-t border-slate-700 px-4 py-4 bg-slate-700/20">
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="border-t border-gray-100 p-4 bg-gray-50">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">Año</p>
-                        <p className="text-white font-semibold">
+                        <p className="text-xs text-gray-600 mb-1">Año</p>
+                        <p className="text-sm font-semibold text-gray-900">
                           {vehicle.anio}
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">Precio</p>
-                        <p className="text-white font-semibold">
+                        <p className="text-xs text-gray-600 mb-1">Precio</p>
+                        <p className="text-sm font-semibold text-gray-900">
                           ${vehicle.precio.toLocaleString()}
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">
-                          Kilometraje
-                        </p>
-                        <p className="text-white font-semibold">
+                        <p className="text-xs text-gray-600 mb-1">Kilometraje</p>
+                        <p className="text-sm font-semibold text-gray-900">
                           {vehicle.kilometraje.toLocaleString()} km
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">
-                          Combustible
-                        </p>
-                        <p className="text-white font-semibold">
-                          {vehicle.tipo_combustible?.nombre_combustible ||
-                            "N/A"}
+                        <p className="text-xs text-gray-600 mb-1">Combustible</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {vehicle.tipo_combustible?.nombre_combustible || "N/A"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">
-                          Transmisión
-                        </p>
-                        <p className="text-white font-semibold">
+                        <p className="text-xs text-gray-600 mb-1">Transmisión</p>
+                        <p className="text-sm font-semibold text-gray-900">
                           {vehicle.transmision || "N/A"}
                         </p>
                       </div>
                       <div>
-                        <p className="text-slate-400 text-sm mb-1">Dueño</p>
-                        <div className="flex items-center gap-2">
-                          <p className="text-white font-semibold text-sm truncate">
+                        <p className="text-xs text-gray-600 mb-1">Dueño</p>
+                        <div className="flex items-center gap-1.5">
+                          {vehicle.dueno_tipo === "empresa" ? (
+                            <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                          ) : (
+                            <User className="w-3.5 h-3.5 text-green-600" />
+                          )}
+                          <p className="text-sm font-semibold text-gray-900 truncate">
                             {vehicle.dueno_nombre}
                           </p>
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-semibold ${
-                              vehicle.dueno_tipo === "empresa"
-                                ? "bg-blue-600 text-white"
-                                : "bg-green-600 text-white"
-                            }`}
-                          >
-                            {vehicle.dueno_tipo === "empresa"
-                              ? "Empresa"
-                              : "Usuario"}
-                          </span>
                         </div>
-                        <p className="text-slate-400 text-xs">
+                        <p className="text-xs text-gray-600 truncate">
                           {vehicle.dueno_correo}
                         </p>
-                        {vehicle.dueno_telefono &&
-                          vehicle.dueno_telefono !== "No especificado" && (
-                            <p className="text-slate-400 text-xs">
-                              {vehicle.dueno_telefono}
-                            </p>
-                          )}
                       </div>
                     </div>
-                    {/* Galería de imágenes expandida */}
-                    {vehicle.imagen_vehiculo &&
-                      vehicle.imagen_vehiculo.length > 1 && (
-                        <div className="mt-4 pt-4 border-t border-slate-700">
-                          <p className="text-slate-400 text-sm mb-3">
-                            Imágenes
-                          </p>
-                          <div className="grid grid-cols-4 gap-2">
-                            {vehicle.imagen_vehiculo.map((img, idx) => (
-                              <img
-                                key={idx}
-                                src={img.url_imagen}
-                                alt={`Imagen ${idx + 1}`}
-                                className="w-full h-20 object-cover rounded-lg"
-                              />
-                            ))}
-                          </div>
+
+                    {/* Acciones Mobile */}
+                    <div className="sm:hidden flex gap-2 pt-3 border-t border-gray-200">
+                      <button
+                        onClick={() => setModal({ type: "view", vehicle })}
+                        className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium"
+                      >
+                        Ver
+                      </button>
+                      <button
+                        onClick={() => handleToggleVisibility(vehicle)}
+                        disabled={saving}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium ${
+                          vehicle.oculto
+                            ? "bg-green-100 text-green-700"
+                            : "bg-orange-100 text-orange-700"
+                        }`}
+                      >
+                        {vehicle.oculto ? "Mostrar" : "Ocultar"}
+                      </button>
+                      <button
+                        onClick={() => setModal({ type: "delete", vehicle })}
+                        disabled={saving}
+                        className="flex-1 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+
+                    {/* Galería */}
+                    {vehicle.imagen_vehiculo && vehicle.imagen_vehiculo.length > 1 && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <p className="text-xs text-gray-600 mb-3">Imágenes</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {vehicle.imagen_vehiculo.map((img, idx) => (
+                            <img
+                              key={idx}
+                              src={img.url_imagen}
+                              alt={`Imagen ${idx + 1}`}
+                              className="w-full h-16 sm:h-20 object-cover rounded-lg"
+                            />
+                          ))}
                         </div>
-                      )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             ))
           )}
         </div>
-      </div>
-      {/* Modal Ver Detalles */}
+      </main>
+
+      {/* Modals */}
       {modal.type === "view" && modal.vehicle && (
         <ModalDetalles vehicle={modal.vehicle} onClose={closeModal} />
       )}
-      {/* Modal Eliminar */}
+
       {modal.type === "delete" && modal.vehicle && (
         <ModalEliminar
           vehicle={modal.vehicle}
@@ -663,6 +623,8 @@ export default function AdminVehiclesPage() {
   );
 }
 
+// Modales actualizados
+
 interface ModalDetallesProps {
   vehicle: Vehicle;
   onClose: () => void;
@@ -670,92 +632,109 @@ interface ModalDetallesProps {
 
 function ModalDetalles({ vehicle, onClose }: ModalDetallesProps) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-slate-800 rounded-2xl shadow-xl max-w-3xl w-full p-6 border border-slate-700 my-8">
-        <h2 className="text-2xl font-bold text-white mb-6">
-          Detalles del Vehículo
-        </h2>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-xl max-w-3xl w-full p-6 my-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900">
+            Detalles del Vehículo
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
         {vehicle.imagen_vehiculo && vehicle.imagen_vehiculo.length > 0 && (
-          <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-2 gap-3 mb-6">
             {vehicle.imagen_vehiculo.map((img, idx) => (
               <img
                 key={idx}
                 src={img.url_imagen}
                 alt={`Imagen ${idx + 1}`}
-                className="w-full h-48 object-cover rounded-lg"
+                className="w-full h-40 sm:h-48 object-cover rounded-lg"
               />
             ))}
           </div>
         )}
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
+
+        <div className="grid sm:grid-cols-2 gap-4">
           <div>
-            <p className="text-slate-400 text-sm">Marca y Modelo</p>
-            <p className="text-white font-semibold text-lg">
+            <p className="text-xs font-medium text-gray-600 mb-1">
+              Marca y Modelo
+            </p>
+            <p className="text-sm font-bold text-gray-900">
               {vehicle.marca} {vehicle.modelo}
             </p>
           </div>
           <div>
-            <p className="text-slate-400 text-sm">Año</p>
-            <p className="text-white font-semibold">{vehicle.anio}</p>
+            <p className="text-xs font-medium text-gray-600 mb-1">Año</p>
+            <p className="text-sm font-semibold text-gray-900">{vehicle.anio}</p>
           </div>
           <div>
-            <p className="text-slate-400 text-sm">Precio</p>
-            <p className="text-white font-semibold">
+            <p className="text-xs font-medium text-gray-600 mb-1">Precio</p>
+            <p className="text-sm font-semibold text-gray-900">
               ${vehicle.precio.toLocaleString()}
             </p>
           </div>
           <div>
-            <p className="text-slate-400 text-sm">Kilometraje</p>
-            <p className="text-white font-semibold">
+            <p className="text-xs font-medium text-gray-600 mb-1">Kilometraje</p>
+            <p className="text-sm font-semibold text-gray-900">
               {vehicle.kilometraje.toLocaleString()} km
             </p>
           </div>
           <div>
-            <p className="text-slate-400 text-sm">Combustible</p>
-            <p className="text-white font-semibold">
+            <p className="text-xs font-medium text-gray-600 mb-1">Combustible</p>
+            <p className="text-sm font-semibold text-gray-900">
               {vehicle.tipo_combustible?.nombre_combustible || "N/A"}
             </p>
           </div>
           <div>
-            <p className="text-slate-400 text-sm">Transmisión</p>
-            <p className="text-white font-semibold">
+            <p className="text-xs font-medium text-gray-600 mb-1">Transmisión</p>
+            <p className="text-sm font-semibold text-gray-900">
               {vehicle.transmision || "N/A"}
             </p>
           </div>
-          <div className="md:col-span-2">
-            <p className="text-slate-400 text-sm">Dueño</p>
-            <div className="flex items-center gap-2 mb-2">
-              <p className="text-white font-semibold">{vehicle.dueno_nombre}</p>
+          <div className="sm:col-span-2">
+            <p className="text-xs font-medium text-gray-600 mb-1">Dueño</p>
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-sm font-semibold text-gray-900">
+                {vehicle.dueno_nombre}
+              </p>
               <span
-                className={`px-2 py-1 rounded text-xs font-semibold ${
+                className={`px-2 py-0.5 rounded text-xs font-semibold ${
                   vehicle.dueno_tipo === "empresa"
-                    ? "bg-blue-600 text-white"
-                    : "bg-green-600 text-white"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-green-100 text-green-700"
                 }`}
               >
                 {vehicle.dueno_tipo === "empresa" ? "Empresa" : "Usuario"}
               </span>
             </div>
-            <p className="text-slate-300 text-sm">{vehicle.dueno_correo}</p>
-            {vehicle.dueno_telefono &&
-              vehicle.dueno_telefono !== "No especificado" && (
-                <p className="text-slate-300 text-sm">
-                  {vehicle.dueno_telefono}
-                </p>
-              )}
+            <p className="text-sm text-gray-700">{vehicle.dueno_correo}</p>
+            {vehicle.dueno_telefono && vehicle.dueno_telefono !== "No especificado" && (
+              <p className="text-sm text-gray-700">{vehicle.dueno_telefono}</p>
+            )}
           </div>
-
           <div>
-            <p className="text-slate-400 text-sm">Estado</p>
-            <p className="text-white font-semibold">
+            <p className="text-xs font-medium text-gray-600 mb-1">Estado</p>
+            <span
+              className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${
+                vehicle.oculto
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-green-100 text-green-700"
+              }`}
+            >
               {vehicle.oculto ? "Oculto" : "Visible"}
-            </p>
+            </span>
           </div>
         </div>
-        <div className="flex justify-end gap-3">
+
+        <div className="flex justify-end mt-6">
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+            className="px-6 py-2.5 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
           >
             Cerrar
           </button>
@@ -772,21 +751,16 @@ interface ModalEliminarProps {
   saving: boolean;
 }
 
-function ModalEliminar({
-  vehicle,
-  onConfirm,
-  onClose,
-  saving,
-}: ModalEliminarProps) {
+function ModalEliminar({ vehicle, onConfirm, onClose, saving }: ModalEliminarProps) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-700">
-        <h2 className="text-2xl font-bold text-white mb-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-xl max-w-md w-full p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">
           Confirmar Eliminación
         </h2>
-        <p className="text-slate-300 mb-6">
+        <p className="text-sm text-gray-700 mb-6">
           ¿Estás seguro de que quieres eliminar el vehículo{" "}
-          <span className="font-semibold text-white">
+          <span className="font-semibold text-gray-900">
             {vehicle.marca} {vehicle.modelo} {vehicle.anio}
           </span>
           ? Esta acción no se puede deshacer y eliminará todas las imágenes
@@ -796,14 +770,14 @@ function ModalEliminar({
           <button
             onClick={onClose}
             disabled={saving}
-            className="px-6 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors disabled:opacity-50"
+            className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={onConfirm}
             disabled={saving}
-            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+            className="px-6 py-2.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             {saving ? (
               <>

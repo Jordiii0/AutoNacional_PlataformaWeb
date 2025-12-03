@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "/icon.png/route": "app/icon.png/route.js",
   "/shop/page": "app/shop/page.js",
+=======
+  "/vehicle/[id]/page": "app/vehicle/[id]/page.js",
+>>>>>>> 535a841 (Responsibidad para celular 100%)
   "/page": "app/page.js"
 }

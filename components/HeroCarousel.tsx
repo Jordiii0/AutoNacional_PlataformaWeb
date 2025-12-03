@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, Building } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 
 interface Slide {
   image: string;
@@ -12,6 +13,10 @@ interface Slide {
 const HeroCarousel: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userType, setUserType] = useState<'usuario' | 'empresa' | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const slides: Slide[] = [
     {
@@ -30,6 +35,74 @@ const HeroCarousel: React.FC = () => {
       subtitle: 'Publica tu vehículo de forma rápida y sencilla'
     }
   ];
+
+  // Verificar sesión y tipo de usuario
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          setIsLoggedIn(false);
+          setUserType(null);
+          setUserId(null);
+          setLoading(false);
+          return;
+        }
+
+        setIsLoggedIn(true);
+        setUserId(session.user.id);
+
+        // Verificar si es empresa
+        const { data: empresaData } = await supabase
+          .from('empresa')
+          .select('id')
+          .eq('usuario_id', session.user.id)
+          .maybeSingle();
+
+        if (empresaData) {
+          setUserType('empresa');
+        } else {
+          setUserType('usuario');
+        }
+      } catch (error) {
+        console.error('Error checking session:', error);
+        setIsLoggedIn(false);
+        setUserType(null);
+        setUserId(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkSession();
+
+    // Escuchar cambios en la autenticación
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!session) {
+        setIsLoggedIn(false);
+        setUserType(null);
+        setUserId(null);
+        return;
+      }
+
+      setIsLoggedIn(true);
+      setUserId(session.user.id);
+
+      // Verificar tipo de usuario al cambiar sesión
+      const { data: empresaData } = await supabase
+        .from('empresa')
+        .select('id')
+        .eq('usuario_id', session.user.id)
+        .maybeSingle();
+
+      setUserType(empresaData ? 'empresa' : 'usuario');
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!isAutoPlaying) return;
@@ -56,6 +129,27 @@ const HeroCarousel: React.FC = () => {
     setIsAutoPlaying(false);
   };
 
+  // Determinar la ruta y el texto del botón según el tipo de usuario
+  const getProfileLink = () => {
+    if (!userId) return '/login';
+    
+    if (userType === 'empresa') {
+      return `/business-profile/`;
+    }
+
+    return `/profile/`;
+  };
+
+  const getProfileButtonText = () => {
+    if (userType === 'empresa') return 'Mi Empresa';
+    return 'Mi Perfil';
+  };
+
+  const getProfileIcon = () => {
+    if (userType === 'empresa') return <Building className="w-4 h-4" />;
+    return <User className="w-4 h-4" />;
+  };
+
   return (
     <section className="relative h-[500px] md:h-[600px] lg:h-[650px] overflow-hidden bg-gray-900">
       {/* Slides */}
@@ -70,7 +164,6 @@ const HeroCarousel: React.FC = () => {
             className="absolute inset-0 bg-cover bg-center bg-no-repeat"
             style={{ backgroundImage: `url(${slide.image})` }}
           >
-            {/* Overlay más sutil */}
             <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-transparent"></div>
           </div>
 
@@ -84,20 +177,35 @@ const HeroCarousel: React.FC = () => {
                 {slide.subtitle}
               </p>
 
-              {/* CTAs */}
+              {/* CTAs - Botón dinámico según tipo de usuario */}
               <div className="flex flex-wrap gap-4 animate-fade-in-delay-2">
-                <a
-                  href="/login"
-                  className="inline-block px-8 py-3 bg-white text-gray-900 text-sm font-semibold rounded-lg hover:bg-gray-100 transition-colors shadow-lg"
-                >
-                  Inicia Sesión
-                </a>
-                <a
-                  href="/shop"
-                  className="inline-block px-8 py-3 bg-transparent text-white text-sm font-semibold rounded-lg border-2 border-white hover:bg-white hover:text-gray-900 transition-colors"
-                >
-                  Ver Catálogo
-                </a>
+                {!loading && (
+                  <>
+                    {isLoggedIn ? (
+                      <a
+                        href={getProfileLink()}
+                        className="inline-flex items-center gap-2 px-8 py-3 bg-white text-gray-900 text-sm font-semibold rounded-lg hover:bg-gray-100 transition-colors shadow-lg"
+                      >
+                        {getProfileIcon()}
+                        {getProfileButtonText()}
+                      </a>
+                    ) : (
+                      <a
+                        href="/login"
+                        className="inline-block px-8 py-3 bg-white text-gray-900 text-sm font-semibold rounded-lg hover:bg-gray-100 transition-colors shadow-lg"
+                      >
+                        Inicia Sesión
+                      </a>
+                    )}
+                    
+                    <a
+                      href="/shop"
+                      className="inline-block px-8 py-3 bg-transparent text-white text-sm font-semibold rounded-lg border-2 border-white hover:bg-white hover:text-gray-900 transition-colors"
+                    >
+                      Ver Catálogo
+                    </a>
+                  </>
+                )}
               </div>
             </div>
           </div>

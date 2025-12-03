@@ -149,7 +149,9 @@ export default function ShopPage() {
     }
 
     if (filters.vehicleType) {
-      filtered = filtered.filter((v) => v.tipo_vehiculo === filters.vehicleType);
+      filtered = filtered.filter(
+        (v) => v.tipo_vehiculo === filters.vehicleType
+      );
     }
 
     if (filters.region) {
@@ -278,7 +280,8 @@ export default function ShopPage() {
           ...vehiculo,
           images: imagesByVehicle.get(vehiculo.id) || [],
           tipo_combustible:
-            combustibleMap.get(vehiculo.tipo_combustible_id) || "No especificado",
+            combustibleMap.get(vehiculo.tipo_combustible_id) ||
+            "No especificado",
           tipo_vehiculo:
             tipoMap.get(vehiculo.tipo_vehiculo_id) || "No especificado",
           ciudad_nombre:
@@ -598,11 +601,11 @@ export default function ShopPage() {
             )}
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
             {filteredVehicles.map((vehicle) => (
               <div
                 key={vehicle.id}
-                className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:border-gray-300 transition-all cursor-pointer group"
+                className="bg-white rounded-lg md:rounded-xl border border-gray-100 overflow-hidden hover:border-gray-300 transition-all cursor-pointer group"
                 onClick={() => router.push(`/vehicle/${vehicle.id}`)}
               >
                 <div className="relative aspect-[4/3] bg-gray-100">
@@ -620,22 +623,22 @@ export default function ShopPage() {
                     </div>
                   )}
 
-                  <div className="absolute top-2 left-2">
-                    <span className="px-2 py-1 bg-white/90 backdrop-blur-sm rounded-md text-xs font-semibold text-gray-900">
+                  <div className="absolute top-1.5 left-1.5 md:top-2 md:left-2">
+                    <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-white/90 backdrop-blur-sm rounded text-xs font-semibold text-gray-900">
                       {vehicle.anio}
                     </span>
                   </div>
                 </div>
 
-                <div className="p-4">
-                  <h3 className="font-bold text-gray-900 mb-1 line-clamp-1">
+                <div className="p-3 md:p-4">
+                  <h3 className="font-bold text-gray-900 mb-1 line-clamp-1 text-sm md:text-base">
                     {vehicle.marca} {vehicle.modelo}
                   </h3>
-                  <p className="text-xl font-bold text-gray-900 mb-3">
+                  <p className="text-lg md:text-xl font-bold text-gray-900 mb-2 md:mb-3">
                     {formatPrice(vehicle.precio)}
                   </p>
 
-                  <div className="space-y-2 text-xs text-gray-600 mb-4">
+                  <div className="space-y-1.5 md:space-y-2 text-xs text-gray-600 mb-3 md:mb-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
                         <Gauge className="w-3.5 h-3.5" />
@@ -658,8 +661,8 @@ export default function ShopPage() {
                     </div>
                   </div>
 
-                  <button className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white py-2 text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
-                    <Eye className="w-4 h-4" />
+                  <button className="w-full flex items-center justify-center gap-1.5 md:gap-2 bg-gray-900 text-white py-2 text-xs md:text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+                    <Eye className="w-3.5 h-3.5 md:w-4 md:h-4" />
                     Ver Detalles
                   </button>
                 </div>
