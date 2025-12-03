@@ -23,6 +23,11 @@ interface Region {
   nombre_region: string;
 }
 
+interface Ciudad {
+  id: number;
+  nombre_ciudad: string;
+}
+
 export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -38,21 +43,53 @@ export default function RegisterPage() {
   });
 
   const [regiones, setRegiones] = useState<Region[]>([]);
+  const [ciudades, setCiudades] = useState<Ciudad[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
 
+  // 1. Efecto para cargar las REGIONES al iniciar el componente
   useEffect(() => {
     const fetchRegiones = async () => {
-      const { data, error } = await supabase
-        .from("region")
-        .select("id, nombre_region")
-        .order("nombre_region", { ascending: true });
-      if (!error) setRegiones(data || []);
+      try {
+        const { data, error } = await supabase
+          .from("region")
+          .select("id, nombre_region")
+          .order("nombre_region"); // Ordenar para mejor UX
+
+        if (error) throw error;
+        setRegiones(data || []);
+      } catch (error) {
+        console.error("Error fetching regions:", error);
+        setMsg("Error cargando regiones. Intenta recargar la página.");
+      }
     };
+
     fetchRegiones();
-  }, []);
+  }, []); // El array vacío asegura que se ejecute solo una vez al montar
+
+  // 2. Efecto para cargar las CIUDADES cuando cambia la región seleccionada
+  useEffect(() => {
+    // Limpia la ciudad si no hay región seleccionada
+    if (!form.region_id) {
+      setCiudades([]);
+      setForm((prev) => ({ ...prev, ciudad: "" }));
+      return;
+    }
+
+    const fetchCiudades = async () => {
+      const { data } = await supabase
+        .from("ciudad")
+        .select("id, nombre_ciudad")
+        .eq("region_id", form.region_id)
+        .order("nombre_ciudad");
+
+      setCiudades(data || []);
+    };
+
+    fetchCiudades();
+  }, [form.region_id]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -106,27 +143,9 @@ export default function RegisterPage() {
         setLoading(false);
         return;
       }
+      // Ahora form.ciudad debe ser el nombre de la ciudad seleccionada
       if (!form.ciudad.trim()) {
-        setMsg("Por favor ingresa tu ciudad.");
-        setLoading(false);
-        return;
-      }
-
-      const { data: usuarioExistente, error: errorVerificacion } =
-        await supabase
-          .from("usuario")
-          .select("id")
-          .eq("correo", form.correo.trim())
-          .maybeSingle();
-
-      if (errorVerificacion) {
-        throw new Error(
-          "Error verificando correo: " + errorVerificacion.message
-        );
-      }
-
-      if (usuarioExistente) {
-        setMsg("Este correo ya está registrado. Por favor usa otro.");
+        setMsg("Por favor selecciona tu ciudad.");
         setLoading(false);
         return;
       }
@@ -135,6 +154,7 @@ export default function RegisterPage() {
       const regionIdInt = parseInt(form.region_id);
       let ciudadId: number | null = null;
 
+      // Buscar si la ciudad seleccionada ya existe
       const { data: ciudadExistente, error: errorBusqueda } = await supabase
         .from("ciudad")
         .select("id")
@@ -148,6 +168,10 @@ export default function RegisterPage() {
       if (ciudadExistente) {
         ciudadId = ciudadExistente.id;
       } else {
+        // Esto solo ocurriría si el usuario escribió la ciudad en un input (anterior)
+        // o si la base de datos no está sincronizada, lo cual no es el caso
+        // con el campo select que estamos usando ahora.
+        // Mantenemos la lógica de creación por si acaso, aunque es menos probable.
         const { data: ciudadNueva, error: errorInsertCiudad } = await supabase
           .from("ciudad")
           .insert({ nombre_ciudad: ciudadNombre, region_id: regionIdInt })
@@ -234,11 +258,11 @@ export default function RegisterPage() {
           {msg && (
             <div
               className={`mb-6 p-4 rounded-xl flex items-start gap-3 border text-sm
-               ${
-                 msg.includes("exitosamente")
-                   ? "bg-green-50 border-green-100"
-                   : "bg-red-50 border-red-100"
-               }`}
+                ${
+                  msg.includes("exitosamente")
+                    ? "bg-green-50 border-green-100"
+                    : "bg-red-50 border-red-100"
+                }`}
             >
               {msg.includes("exitosamente") ? (
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
@@ -367,6 +391,7 @@ export default function RegisterPage() {
 
             {/* Región y Ciudad */}
             <div className="grid sm:grid-cols-2 gap-4">
+              {/* Región */}
               <div>
                 <label
                   htmlFor="region_id"
@@ -394,6 +419,8 @@ export default function RegisterPage() {
                   </select>
                 </div>
               </div>
+              
+              {/* Ciudad (Ahora un select con el estilo consistente) */}
               <div>
                 <label
                   htmlFor="ciudad"
@@ -401,17 +428,27 @@ export default function RegisterPage() {
                 >
                   Ciudad *
                 </label>
-                <input
-                  id="ciudad"
-                  name="ciudad"
-                  type="text"
-                  value={form.ciudad}
-                  onChange={handleChange}
-                  placeholder="Santiago"
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
-                  disabled={loading}
-                  required
-                />
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <select
+                    id="ciudad"
+                    name="ciudad"
+                    value={form.ciudad}
+                    onChange={handleChange}
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition appearance-none"
+                    disabled={loading || !form.region_id || ciudades.length === 0}
+                    required
+                  >
+                    <option value="">
+                        {form.region_id ? (ciudades.length > 0 ? 'Selecciona ciudad' : 'Cargando ciudades...') : 'Selecciona una región primero'}
+                    </option>
+                    {ciudades.map((ciudad) => (
+                      <option key={ciudad.id} value={ciudad.nombre_ciudad}>
+                        {ciudad.nombre_ciudad}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 

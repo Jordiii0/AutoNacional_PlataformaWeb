@@ -27,6 +27,11 @@ interface Region {
   nombre_region: string;
 }
 
+interface Ciudad {
+  id: number;
+  nombre_ciudad: string;
+}
+
 export default function RegisterEmpresaPage() {
   const router = useRouter();
   const [registerForm, setRegisterForm] = useState({
@@ -34,19 +39,20 @@ export default function RegisterEmpresaPage() {
     rut_empresa: "",
     correo_electronico: "",
     telefono: "",
-    direccion: "", // ✅ Nuevo campo
+    direccion: "",
     representante_legal: "",
     rut_representante: "",
-    telefono_representante: "", // ✅ Nuevo campo
+    telefono_representante: "",
     region: "",
     ciudad: "",
-    sitio_web: "", // ✅ Nuevo campo
-    descripcion: "", // ✅ Nuevo campo
+    sitio_web: "",
+    descripcion: "",
     password: "",
     confirmPassword: "",
   });
 
   const [regions, setRegions] = useState<Region[]>([]);
+  const [ciudades, setCiudades] = useState<Ciudad[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -57,6 +63,31 @@ export default function RegisterEmpresaPage() {
     checkAuth();
     loadRegions();
   }, []);
+
+  // Cargar ciudades cuando cambia la región seleccionada
+  useEffect(() => {
+    if (!registerForm.region) {
+      setCiudades([]);
+      setRegisterForm((prev) => ({ ...prev, ciudad: "" }));
+      return;
+    }
+
+    const fetchCiudades = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("ciudad")
+          .select("id, nombre_ciudad")
+          .eq("region_id", parseInt(registerForm.region, 10))
+          .order("nombre_ciudad");
+        if (error) throw error;
+        setCiudades(data || []);
+      } catch (error) {
+        console.error("Error cargando ciudades:", error);
+      }
+    };
+
+    fetchCiudades();
+  }, [registerForm.region]);
 
   const checkAuth = async () => {
     try {
@@ -159,7 +190,7 @@ export default function RegisterEmpresaPage() {
         return;
       }
       if (!registerForm.ciudad.trim()) {
-        setErrorMessage("Por favor ingresa la ciudad");
+        setErrorMessage("Por favor selecciona una ciudad");
         setLoading(false);
         return;
       }
@@ -213,21 +244,20 @@ export default function RegisterEmpresaPage() {
         return;
       }
 
-      // ✅ Insertar empresa con los nuevos campos
       const { error: insertError } = await supabase.from("empresa").insert({
         usuario_id: authData.user.id,
         nombre_comercial: registerForm.nombre_comercial.trim(),
         rut_empresa: registerForm.rut_empresa.trim(),
         correo_electronico: registerForm.correo_electronico.trim(),
         telefono: registerForm.telefono.trim() || null,
-        direccion: registerForm.direccion.trim() || null, // ✅ Nuevo
+        direccion: registerForm.direccion.trim() || null,
         representante_legal: registerForm.representante_legal.trim(),
         rut_representante: registerForm.rut_representante.trim(),
-        telefono_representante: registerForm.telefono_representante.trim() || null, // ✅ Nuevo
+        telefono_representante: registerForm.telefono_representante.trim() || null,
         region_id: regionId,
         ciudad_id: ciudadId,
-        sitio_web: registerForm.sitio_web.trim() || null, // ✅ Nuevo
-        descripcion: registerForm.descripcion.trim() || null, // ✅ Nuevo
+        sitio_web: registerForm.sitio_web.trim() || null,
+        descripcion: registerForm.descripcion.trim() || null,
         validada: false,
         habilitado: true,
       });
@@ -362,7 +392,7 @@ export default function RegisterEmpresaPage() {
                       name="correo_electronico"
                       value={registerForm.correo_electronico}
                       onChange={handleInputChange}
-                      placeholder="contacto@empresa.com"
+                      placeholder="empresa@ejemplo.com"
                       className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
                       disabled={loading}
                     />
@@ -391,73 +421,23 @@ export default function RegisterEmpresaPage() {
                 </div>
               </div>
 
-              {/* ✅ Nuevos campos: Dirección y Sitio Web */}
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label
-                    htmlFor="direccion"
-                    className="block text-xs font-medium text-gray-700 mb-2"
-                  >
-                    Dirección
-                  </label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      id="direccion"
-                      type="text"
-                      name="direccion"
-                      value={registerForm.direccion}
-                      onChange={handleInputChange}
-                      placeholder="Av. Libertador 123"
-                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label
-                    htmlFor="sitio_web"
-                    className="block text-xs font-medium text-gray-700 mb-2"
-                  >
-                    Sitio Web
-                  </label>
-                  <div className="relative">
-                    <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                      id="sitio_web"
-                      type="url"
-                      name="sitio_web"
-                      value={registerForm.sitio_web}
-                      onChange={handleInputChange}
-                      placeholder="https://miempresa.com"
-                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* ✅ Nuevo campo: Descripción */}
               <div>
                 <label
-                  htmlFor="descripcion"
+                  htmlFor="direccion"
                   className="block text-xs font-medium text-gray-700 mb-2"
                 >
-                  Descripción de la Empresa
+                  Dirección
                 </label>
-                <div className="relative">
-                  <FileText className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <textarea
-                    id="descripcion"
-                    name="descripcion"
-                    value={registerForm.descripcion}
-                    onChange={handleInputChange}
-                    placeholder="Describe tu empresa, servicios y experiencia..."
-                    rows={3}
-                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition resize-none"
-                    disabled={loading}
-                  />
-                </div>
+                <input
+                  id="direccion"
+                  type="text"
+                  name="direccion"
+                  value={registerForm.direccion}
+                  onChange={handleInputChange}
+                  placeholder="Calle Falsa 123"
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
+                  disabled={loading}
+                />
               </div>
             </div>
 
@@ -484,7 +464,7 @@ export default function RegisterEmpresaPage() {
                     name="representante_legal"
                     value={registerForm.representante_legal}
                     onChange={handleInputChange}
-                    placeholder="Juan Pérez García"
+                    placeholder="Juan Pérez Gómez"
                     className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
                     disabled={loading}
                   />
@@ -494,7 +474,7 @@ export default function RegisterEmpresaPage() {
                     htmlFor="rut_representante"
                     className="block text-xs font-medium text-gray-700 mb-2"
                   >
-                    RUT *
+                    RUT Representante *
                   </label>
                   <input
                     id="rut_representante"
@@ -509,7 +489,6 @@ export default function RegisterEmpresaPage() {
                 </div>
               </div>
 
-              {/* ✅ Nuevo campo: Teléfono Representante */}
               <div>
                 <label
                   htmlFor="telefono_representante"
@@ -548,22 +527,27 @@ export default function RegisterEmpresaPage() {
                   >
                     Región *
                   </label>
-                  <select
-                    id="region"
-                    name="region"
-                    value={registerForm.region}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition appearance-none"
-                    disabled={loading}
-                  >
-                    <option value="">Selecciona región</option>
-                    {regions.map((region) => (
-                      <option key={region.id} value={region.id}>
-                        {region.nombre_region}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <select
+                      id="region"
+                      name="region"
+                      value={registerForm.region}
+                      onChange={handleInputChange}
+                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition appearance-none"
+                      disabled={loading}
+                      required
+                    >
+                      <option value="">Selecciona región</option>
+                      {regions.map((region) => (
+                        <option key={region.id} value={region.id}>
+                          {region.nombre_region}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+
                 <div>
                   <label
                     htmlFor="ciudad"
@@ -571,27 +555,88 @@ export default function RegisterEmpresaPage() {
                   >
                     Ciudad *
                   </label>
-                  <input
-                    id="ciudad"
-                    type="text"
-                    name="ciudad"
-                    value={registerForm.ciudad}
-                    onChange={handleInputChange}
-                    placeholder="Santiago"
-                    className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
-                    disabled={loading}
-                  />
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <select
+                      id="ciudad"
+                      name="ciudad"
+                      value={registerForm.ciudad}
+                      onChange={handleInputChange}
+                      disabled={!registerForm.region || ciudades.length === 0 || loading}
+                      className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition appearance-none"
+                      required
+                    >
+                      <option value="">
+                        {registerForm.region
+                          ? ciudades.length > 0
+                            ? "Selecciona ciudad"
+                            : "Cargando ciudades..."
+                          : "Selecciona una región primero"}
+                      </option>
+                      {ciudades.map((ciudad) => (
+                        <option key={ciudad.id} value={ciudad.nombre_ciudad}>
+                          {ciudad.nombre_ciudad}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Seguridad */}
+            {/* Información Adicional */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                <Shield className="w-4 h-4 text-gray-600" />
-                <h3 className="text-sm font-semibold text-gray-900">Seguridad</h3>
+                <Globe className="w-4 h-4 text-gray-600" />
+                <h3 className="text-sm font-semibold text-gray-900">
+                  Información Adicional
+                </h3>
               </div>
 
+              <div>
+                <label
+                  htmlFor="sitio_web"
+                  className="block text-xs font-medium text-gray-700 mb-2"
+                >
+                  Sitio Web
+                </label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    id="sitio_web"
+                    type="url"
+                    name="sitio_web"
+                    value={registerForm.sitio_web}
+                    onChange={handleInputChange}
+                    placeholder="https://www.tuempresa.com"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="descripcion"
+                  className="block text-xs font-medium text-gray-700 mb-2"
+                >
+                  Descripción de la Empresa
+                </label>
+                <textarea
+                  id="descripcion"
+                  name="descripcion"
+                  rows={3}
+                  value={registerForm.descripcion}
+                  onChange={handleInputChange}
+                  placeholder="Breve descripción de tu empresa y servicios..."
+                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition resize-vertical"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {/* Contraseñas */}
+            <div className="space-y-3">
               <div>
                 <label
                   htmlFor="password"
@@ -662,27 +707,11 @@ export default function RegisterEmpresaPage() {
               </div>
             </div>
 
-            {/* Nota de validación */}
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-medium text-amber-900 mb-1">
-                    Validación requerida
-                  </p>
-                  <p className="text-xs text-amber-700">
-                    Tu empresa será validada por un administrador antes de poder
-                    publicar vehículos.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gray-900 text-white font-medium py-2.5 text-sm rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-gray-900 text-white font-medium py-2.5 text-sm rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-6"
             >
               {loading ? (
                 <>
@@ -698,29 +727,7 @@ export default function RegisterEmpresaPage() {
             </button>
           </form>
 
-          {/* Footer Links */}
-          <div className="mt-8 pt-6 border-t border-gray-100 text-center space-y-2">
-            <p className="text-xs text-gray-600">
-              ¿Ya tienes cuenta?{" "}
-              <button
-                onClick={() => router.push("/login")}
-                className="text-gray-900 font-medium hover:underline"
-              >
-                Iniciar sesión
-              </button>
-            </p>
-            <p className="text-xs text-gray-600">
-              ¿Eres un usuario particular?{" "}
-              <button
-                onClick={() => router.push("/register")}
-                className="text-gray-900 font-medium hover:underline"
-              >
-                Registro de usuario
-              </button>
-            </p>
-          </div>
-
-          {/* Legal */}
+          {/* Footer */}
           <p className="text-center text-gray-400 text-xs mt-6">
             Al registrarte aceptas nuestros términos y condiciones
           </p>
