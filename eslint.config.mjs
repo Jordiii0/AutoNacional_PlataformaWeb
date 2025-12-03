@@ -10,26 +10,21 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  // Hereda las reglas recomendadas para Next.js core web vitals y TypeScript
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
-      // Relaja 'any' a warning en lugar de error
+      // Permite usar 'any' pero con advertencia
       "@typescript-eslint/no-explicit-any": "warn",
-      
-      // Ignora variables que empiecen con _ (convención para params no usados)
-      "@typescript-eslint/no-unused-vars": ["error", { 
-        "argsIgnorePattern": "^_", 
-        "varsIgnorePattern": "^_" 
-      }],
-      
-      // Permite useEffect warnings (arreglar con useCallback después)
+      // No marcar error por variables no usadas si empiezan con "_"
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }
+      ],
+      // React hooks useEffect: advertencia por dependencias faltantes
       "react-hooks/exhaustive-deps": "warn",
-      
-      // Hace img warning en lugar de error (reemplazar gradualmente)
+      // Uso de <img> en lugar de <Image> genera advertencia
       "@next/next/no-img-element": "warn",
-      
-      // Variables asignadas pero no usadas
-      "@typescript-eslint/no-unused-vars": "warn"
     }
   }
 ];
