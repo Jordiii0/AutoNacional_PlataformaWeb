@@ -1,3 +1,4 @@
+"use client"
 import CategorySection from "@/components/homepage/CategorySection";
 import NewsletterSignup from "@/components/homepage/NewsletterSignup";
 import HeroCarousel from "@/components/HeroCarousel";
