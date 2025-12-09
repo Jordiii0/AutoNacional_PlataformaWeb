@@ -4,14 +4,8 @@
   "dynamicRoutes": {},
   "notFoundRoutes": [],
   "preview": {
-<<<<<<< HEAD
-    "previewModeId": "13d0016dad02d4e81c5fb63d316bc41b",
-    "previewModeSigningKey": "0ede8e525924ad5813dc50f7dda12e95fe6ce07c330470135475b233b9224150",
-    "previewModeEncryptionKey": "717a59a2cf68e5fb8418afc534d59e93e9a6056a0ee75e00d5be510ff43f427a"
-=======
-    "previewModeId": "d49735049a302b8501c3212db5600958",
-    "previewModeSigningKey": "4c966ef04ca0ff2aab9cac60931c2d521e9ccdf4d38d129f11b2d03e67b244f3",
-    "previewModeEncryptionKey": "62aceb8c81959e89ef6f860b9c33b8c12a095032608edf32f702c09ea9dc7a34"
->>>>>>> 535a841 (Responsibidad para celular 100%)
+    "previewModeId": "4f3efc3af3089cd8d18c057417e11861",
+    "previewModeSigningKey": "c9a3ea8fcdf043c59a3ce0ab34591490db1c14fff61a39238f37bd4d223e6e00",
+    "previewModeEncryptionKey": "d8eb3033268b4b24195b7ac84ac870abe95af9beda7cb36c0cb5fa982c396fcb"
   }
 }

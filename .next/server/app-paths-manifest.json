@@ -1,9 +1,10 @@
 {
-<<<<<<< HEAD
   "/icon.png/route": "app/icon.png/route.js",
-  "/shop/page": "app/shop/page.js",
-=======
+  "/comparativa/page": "app/comparativa/page.js",
+  "/favorites/page": "app/favorites/page.js",
   "/vehicle/[id]/page": "app/vehicle/[id]/page.js",
->>>>>>> 535a841 (Responsibidad para celular 100%)
-  "/page": "app/page.js"
+  "/publication/page": "app/publication/page.js",
+  "/page": "app/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/business-profile/page": "app/business-profile/page.js"
 }

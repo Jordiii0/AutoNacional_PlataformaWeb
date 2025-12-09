@@ -16,6 +16,7 @@ import {
   Fuel,
   Cog,
   MapPin,
+  Navigation,
 } from "lucide-react";
 
 // Interfaces
@@ -40,7 +41,7 @@ interface Vehicle {
   precio: number;
   marca: string;
   modelo: string;
-  anio: number;
+  ano: number;
   kilometraje: number;
   transmision: string;
   estado_vehiculo: string;
@@ -62,8 +63,20 @@ interface VehicleWithImages extends Vehicle {
   images: string[];
 }
 
+interface RegionCoords {
+  id: number;
+  latitude: number;
+  longitude: number;
+}
+
+interface UserLocation {
+  latitude: number;
+  longitude: number;
+}
+
 const SORT_OPTIONS = [
   { value: "default", label: "Más recientes" },
+  { value: "distance_asc", label: "Más cercanos" },
   { value: "price_desc", label: "Precio: Mayor a Menor" },
   { value: "price_asc", label: "Precio: Menor a Mayor" },
   { value: "year_desc", label: "Año: Más nuevo" },
@@ -81,6 +94,14 @@ export default function ShopPage() {
   const [tiposCombustible, setTiposCombustible] = useState<CatalogItem[]>([]);
   const [tiposVehiculo, setTiposVehiculo] = useState<CatalogItem[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
+  const [cities, setCities] = useState<City[]>([]);
+
+  const [regionCoords, setRegionCoords] = useState<Map<number, RegionCoords>>(
+    new Map()
+  );
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string>("");
 
   const [filters, setFilters] = useState({
     search: "",
@@ -93,20 +114,165 @@ export default function ShopPage() {
     conditions: searchParams?.getAll("conditions") || [],
     vehicleType: "",
     region: "",
+    ciudad: "", // ✅ NUEVO: Filtro de ciudad
+    maxDistance: "",
   });
 
   const [sortBy, setSortBy] = useState("default");
   const [imageErrors, setImageErrors] = useState<Set<number>>(new Set());
 
-  // ✅ useEffect optimizado: solo corre una vez
+  // ✅ Aplicar filtros desde URL al cargar
+  useEffect(() => {
+    const ciudadId = searchParams?.get("ciudad_id");
+    const regionId = searchParams?.get("region_id");
+    const type = searchParams?.get("type");
+    const price = searchParams?.get("price");
+
+    if (ciudadId || regionId || type || price) {
+      setFilters(prev => ({
+        ...prev,
+        ciudad: ciudadId || "",
+        region: regionId || "",
+        vehicleType: type || "",
+      }));
+
+      // Aplicar filtro de precio si existe
+      if (price) {
+        if (price === '20000000+') {
+          setFilters(prev => ({ ...prev, priceMin: "20000000" }));
+        } else {
+          const [min, max] = price.split('-');
+          setFilters(prev => ({ 
+            ...prev, 
+            priceMin: min || "", 
+            priceMax: max || "" 
+          }));
+        }
+      }
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     loadData();
-  }, []); // ✅ Array vacío: solo al montar
+  }, []);
 
-  // ✅ OPTIMIZACIÓN 1: Usar Maps para lookups O(1) en lugar de O(n)
+  // ✅ Cargar ciudades cuando cambia la región
+  useEffect(() => {
+    const loadCities = async () => {
+      if (!filters.region) {
+        setCities([]);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('ciudad')
+          .select('id, nombre_ciudad, region_id')
+          .eq('region_id', parseInt(filters.region))
+          .order('nombre_ciudad', { ascending: true });
+
+        if (error) throw error;
+        setCities(data || []);
+      } catch (error) {
+        console.error('Error loading cities:', error);
+        setCities([]);
+      }
+    };
+
+    loadCities();
+  }, [filters.region]);
+
+  const calculateDistance = useCallback(
+    (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+      const R = 6371;
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLon = ((lon2 - lon1) * Math.PI) / 180;
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    },
+    []
+  );
+
+  const getUserLocation = useCallback(() => {
+    setLocationLoading(true);
+    setLocationError("");
+
+    if (!navigator.geolocation) {
+      setLocationError("Geolocalización no disponible en tu navegador");
+      setLocationLoading(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        setUserLocation(location);
+        setLocationLoading(false);
+        setSortBy("distance_asc");
+      },
+      (error) => {
+        let errorMessage = "";
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage = "Permiso de ubicación denegado";
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage = "Ubicación no disponible";
+            break;
+          case error.TIMEOUT:
+            errorMessage = "Tiempo de espera agotado";
+            break;
+          default:
+            errorMessage = "Error al obtener ubicación";
+        }
+        setLocationError(errorMessage);
+        setLocationLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  }, []);
+
+  const vehicleDistances = useMemo(() => {
+    const distances = new Map<number, number>();
+
+    if (userLocation) {
+      vehicles.forEach((vehicle) => {
+        const coords = regionCoords.get(vehicle.region_id);
+        if (coords?.latitude && coords?.longitude) {
+          const distance = calculateDistance(
+            userLocation.latitude,
+            userLocation.longitude,
+            coords.latitude,
+            coords.longitude
+          );
+          distances.set(vehicle.id, distance);
+        }
+      });
+    }
+
+    return distances;
+  }, [vehicles, userLocation, regionCoords, calculateDistance]);
+
+  // ✅ FILTRADO CORREGIDO
   const filteredVehicles = useMemo(() => {
     let filtered = [...vehicles];
 
+    // Filtro por búsqueda de texto
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       filtered = filtered.filter(
@@ -116,6 +282,7 @@ export default function ShopPage() {
       );
     }
 
+    // Filtro por marca
     if (filters.brand) {
       const brandLower = filters.brand.toLowerCase();
       filtered = filtered.filter((v) =>
@@ -123,6 +290,7 @@ export default function ShopPage() {
       );
     }
 
+    // Filtro por modelo
     if (filters.model) {
       const modelLower = filters.model.toLowerCase();
       filtered = filtered.filter((v) =>
@@ -130,15 +298,17 @@ export default function ShopPage() {
       );
     }
 
+    // Filtro por año
     if (filters.yearMin) {
       const yearMin = parseInt(filters.yearMin);
-      filtered = filtered.filter((v) => v.anio >= yearMin);
+      filtered = filtered.filter((v) => v.ano >= yearMin);
     }
     if (filters.yearMax) {
       const yearMax = parseInt(filters.yearMax);
-      filtered = filtered.filter((v) => v.anio <= yearMax);
+      filtered = filtered.filter((v) => v.ano <= yearMax);
     }
 
+    // Filtro por precio
     if (filters.priceMin) {
       const priceMin = parseInt(filters.priceMin);
       filtered = filtered.filter((v) => v.precio >= priceMin);
@@ -148,24 +318,50 @@ export default function ShopPage() {
       filtered = filtered.filter((v) => v.precio <= priceMax);
     }
 
+    // Filtro por tipo de vehículo
     if (filters.vehicleType) {
       filtered = filtered.filter(
         (v) => v.tipo_vehiculo === filters.vehicleType
       );
     }
 
-    if (filters.region) {
+    // ✅ FILTRO POR CIUDAD (prioritario)
+    if (filters.ciudad) {
+      const ciudadId = parseInt(filters.ciudad);
+      filtered = filtered.filter((v) => v.ciudad_id === ciudadId);
+    }
+    // ✅ FILTRO POR REGIÓN (solo si no hay ciudad seleccionada)
+    else if (filters.region) {
       const regionId = parseInt(filters.region);
       filtered = filtered.filter((v) => v.region_id === regionId);
     }
 
+    // Filtro por condiciones
     if (filters.conditions.length > 0) {
       const conditionsSet = new Set(filters.conditions);
       filtered = filtered.filter((v) => conditionsSet.has(v.estado_vehiculo));
     }
 
-    // ✅ Ordenamiento optimizado
+    // Filtro por distancia
+    if (filters.maxDistance && userLocation) {
+      const maxDist = parseInt(filters.maxDistance);
+      filtered = filtered.filter((v) => {
+        const distance = vehicleDistances.get(v.id);
+        return distance !== undefined && distance <= maxDist;
+      });
+    }
+
+    // Ordenamiento
     switch (sortBy) {
+      case "distance_asc":
+        filtered.sort((a, b) => {
+          const distA = vehicleDistances.get(a.id);
+          const distB = vehicleDistances.get(b.id);
+          if (distA === undefined) return 1;
+          if (distB === undefined) return -1;
+          return distA - distB;
+        });
+        break;
       case "price_desc":
         filtered.sort((a, b) => b.precio - a.precio);
         break;
@@ -173,10 +369,10 @@ export default function ShopPage() {
         filtered.sort((a, b) => a.precio - b.precio);
         break;
       case "year_desc":
-        filtered.sort((a, b) => b.anio - a.anio);
+        filtered.sort((a, b) => b.ano - a.ano);
         break;
       case "year_asc":
-        filtered.sort((a, b) => a.anio - b.anio);
+        filtered.sort((a, b) => a.ano - b.ano);
         break;
       case "mileage_asc":
         filtered.sort((a, b) => a.kilometraje - b.kilometraje);
@@ -190,14 +386,12 @@ export default function ShopPage() {
     }
 
     return filtered;
-  }, [vehicles, filters, sortBy]);
+  }, [vehicles, filters, sortBy, vehicleDistances, userLocation]);
 
-  // ✅ OPTIMIZACIÓN 2: Función de carga completamente optimizada
   const loadData = async () => {
     try {
       setLoading(true);
 
-      // ✅ 1. Cargar TODOS los catálogos en paralelo
       const [combustibleRes, tipoRes, regionesRes, ciudadesRes, vehiculosRes] =
         await Promise.all([
           supabase
@@ -210,7 +404,7 @@ export default function ShopPage() {
             .order("nombre_tipo"),
           supabase
             .from("region")
-            .select("id, nombre_region")
+            .select("id, nombre_region, latitude, longitude")
             .order("nombre_region"),
           supabase
             .from("ciudad")
@@ -221,10 +415,9 @@ export default function ShopPage() {
             .select("*")
             .eq("oculto", false)
             .order("created_at", { ascending: false })
-            .limit(200), // ✅ Limitar a 200 vehículos iniciales
+            .limit(200),
         ]);
 
-      // ✅ 2. Crear Maps para lookups O(1) en lugar de .find() O(n)
       const combustibleMap = new Map(
         combustibleRes.data?.map((c) => [c.id, c.nombre_combustible]) || []
       );
@@ -238,7 +431,18 @@ export default function ShopPage() {
         ciudadesRes.data?.map((c) => [c.id, c.nombre_ciudad]) || []
       );
 
-      // ✅ 3. Guardar catálogos para los filtros
+      const coords = new Map<number, RegionCoords>();
+      regionesRes.data?.forEach((r) => {
+        if (r.latitude && r.longitude) {
+          coords.set(r.id, {
+            id: r.id,
+            latitude: r.latitude,
+            longitude: r.longitude,
+          });
+        }
+      });
+      setRegionCoords(coords);
+
       setTiposCombustible(
         combustibleRes.data?.map((c) => ({
           id: c.id,
@@ -257,15 +461,13 @@ export default function ShopPage() {
         return;
       }
 
-      // ✅ 4. Cargar TODAS las imágenes en UNA sola query (evita N+1)
       const vehicleIds = vehiculosData.map((v) => v.id);
       const { data: allImages } = await supabase
         .from("imagen_vehiculo")
         .select("vehiculo_id, url_imagen")
         .in("vehiculo_id", vehicleIds)
-        .limit(1000); // ✅ Limitar imágenes por seguridad
+        .limit(1000);
 
-      // ✅ 5. Agrupar imágenes por vehículo usando Map (O(n))
       const imagesByVehicle = new Map<number, string[]>();
       allImages?.forEach((img) => {
         if (!imagesByVehicle.has(img.vehiculo_id)) {
@@ -274,7 +476,6 @@ export default function ShopPage() {
         imagesByVehicle.get(img.vehiculo_id)!.push(img.url_imagen);
       });
 
-      // ✅ 6. Mapear vehículos usando Maps (O(n) en lugar de O(n²))
       const vehiculosConImagenes: VehicleWithImages[] = vehiculosData.map(
         (vehiculo) => ({
           ...vehiculo,
@@ -299,7 +500,6 @@ export default function ShopPage() {
     }
   };
 
-  // ✅ OPTIMIZACIÓN 3: useCallback para evitar re-creación de funciones
   const clearFilters = useCallback(() => {
     setFilters({
       search: "",
@@ -312,17 +512,29 @@ export default function ShopPage() {
       conditions: [],
       vehicleType: "",
       region: "",
+      ciudad: "",
+      maxDistance: "",
     });
     setSortBy("default");
-  }, []);
+    setUserLocation(null);
+    setLocationError("");
+    
+    // ✅ Limpiar URL
+    router.push('/shop');
+  }, [router]);
 
-  // ✅ OPTIMIZACIÓN 4: Memoizar formatPrice
   const formatPrice = useCallback((price: number) => {
     return new Intl.NumberFormat("es-CL", {
       style: "currency",
       currency: "CLP",
       minimumFractionDigits: 0,
     }).format(price);
+  }, []);
+
+  const formatDistance = useCallback((distance: number) => {
+    return distance < 1
+      ? `${(distance * 1000).toFixed(0)} m`
+      : `${distance.toFixed(1)} km`;
   }, []);
 
   const hasActiveFilters = useMemo(() => {
@@ -337,11 +549,13 @@ export default function ShopPage() {
       filters.conditions.length > 0 ||
       filters.vehicleType ||
       filters.region ||
-      sortBy !== "default"
+      filters.ciudad ||
+      filters.maxDistance ||
+      sortBy !== "default" ||
+      userLocation !== null
     );
-  }, [filters, sortBy]);
+  }, [filters, sortBy, userLocation]);
 
-  // ✅ OPTIMIZACIÓN 5: Manejador de errores de imagen memoizado
   const handleImageError = useCallback((vehicleId: number) => {
     setImageErrors((prev) => {
       const newSet = new Set(prev);
@@ -396,6 +610,25 @@ export default function ShopPage() {
               />
             </div>
 
+            <button
+              onClick={getUserLocation}
+              disabled={locationLoading}
+              className={`flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all ${
+                userLocation
+                  ? "bg-green-100 text-green-700 hover:bg-green-200"
+                  : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {locationLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Navigation className="w-4 h-4" />
+              )}
+              <span className="hidden sm:inline">
+                {userLocation ? "Ubicado" : "Mi Ubicación"}
+              </span>
+            </button>
+
             <div className="lg:w-56">
               <div className="relative">
                 <ArrowUpDown className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -405,7 +638,13 @@ export default function ShopPage() {
                   className="w-full pl-9 pr-10 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent appearance-none bg-white"
                 >
                   {SORT_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option
+                      key={option.value}
+                      value={option.value}
+                      disabled={
+                        option.value === "distance_asc" && !userLocation
+                      }
+                    >
                       {option.label}
                     </option>
                   ))}
@@ -429,6 +668,19 @@ export default function ShopPage() {
               )}
             </button>
           </div>
+
+          {locationError && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {locationError}
+            </div>
+          )}
+
+          {userLocation && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 flex items-center gap-2">
+              <Navigation className="w-4 h-4" />
+              <span>Ubicación activada - Mostrando vehículos cercanos (La distancia pertenece a las regiones, no considera la localidad exacta)</span>
+            </div>
+          )}
 
           {showFilters && (
             <div className="mt-4 pt-4 border-t border-gray-100">
@@ -490,11 +742,15 @@ export default function ShopPage() {
                   <select
                     value={filters.region}
                     onChange={(e) =>
-                      setFilters({ ...filters, region: e.target.value })
+                      setFilters({ 
+                        ...filters, 
+                        region: e.target.value,
+                        ciudad: "" // ✅ Resetear ciudad al cambiar región
+                      })
                     }
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
                   >
-                    <option value="">Todas</option>
+                    <option value="">Todas las regiones</option>
                     {regions.map((region) => (
                       <option key={region.id} value={region.id}>
                         {region.nombre_region}
@@ -502,6 +758,51 @@ export default function ShopPage() {
                     ))}
                   </select>
                 </div>
+
+                {/* ✅ NUEVO: Selector de Ciudad */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    Ciudad
+                  </label>
+                  <select
+                    value={filters.ciudad}
+                    onChange={(e) =>
+                      setFilters({ ...filters, ciudad: e.target.value })
+                    }
+                    disabled={!filters.region || cities.length === 0}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {!filters.region 
+                        ? "Selecciona región primero" 
+                        : cities.length === 0 
+                        ? "Cargando ciudades..."
+                        : "Todas las ciudades"}
+                    </option>
+                    {cities.map((city) => (
+                      <option key={city.id} value={city.id}>
+                        {city.nombre_ciudad}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {userLocation && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                      Distancia Máxima (km)
+                    </label>
+                    <input
+                      type="number"
+                      value={filters.maxDistance}
+                      onChange={(e) =>
+                        setFilters({ ...filters, maxDistance: e.target.value })
+                      }
+                      placeholder="50, 100, 200..."
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1.5">
@@ -602,72 +903,82 @@ export default function ShopPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-            {filteredVehicles.map((vehicle) => (
-              <div
-                key={vehicle.id}
-                className="bg-white rounded-lg md:rounded-xl border border-gray-100 overflow-hidden hover:border-gray-300 transition-all cursor-pointer group"
-                onClick={() => router.push(`/vehicle/${vehicle.id}`)}
-              >
-                <div className="relative aspect-[4/3] bg-gray-100">
-                  {!imageErrors.has(vehicle.id) && vehicle.images.length > 0 ? (
-                    <img
-                      src={vehicle.images[0]}
-                      alt={`${vehicle.marca} ${vehicle.modelo}`}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                      onError={() => handleImageError(vehicle.id)}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Car className="w-12 h-12 text-gray-300" />
-                    </div>
-                  )}
-
-                  <div className="absolute top-1.5 left-1.5 md:top-2 md:left-2">
-                    <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-white/90 backdrop-blur-sm rounded text-xs font-semibold text-gray-900">
-                      {vehicle.anio}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-3 md:p-4">
-                  <h3 className="font-bold text-gray-900 mb-1 line-clamp-1 text-sm md:text-base">
-                    {vehicle.marca} {vehicle.modelo}
-                  </h3>
-                  <p className="text-lg md:text-xl font-bold text-gray-900 mb-2 md:mb-3">
-                    {formatPrice(vehicle.precio)}
-                  </p>
-
-                  <div className="space-y-1.5 md:space-y-2 text-xs text-gray-600 mb-3 md:mb-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <Gauge className="w-3.5 h-3.5" />
-                        <span>{vehicle.kilometraje.toLocaleString()} km</span>
+            {filteredVehicles.map((vehicle) => {
+              const distance = vehicleDistances.get(vehicle.id);
+              return (
+                <div
+                  key={vehicle.id}
+                  className="bg-white rounded-lg md:rounded-xl border border-gray-100 overflow-hidden hover:border-gray-300 transition-all cursor-pointer group"
+                  onClick={() => router.push(`/vehicle/${vehicle.id}`)}
+                >
+                  <div className="relative aspect-[4/3] bg-gray-100">
+                    {!imageErrors.has(vehicle.id) &&
+                    vehicle.images.length > 0 ? (
+                      <img
+                        src={vehicle.images[0]}
+                        alt={`${vehicle.marca} ${vehicle.modelo}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={() => handleImageError(vehicle.id)}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Car className="w-12 h-12 text-gray-300" />
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Cog className="w-3.5 h-3.5" />
-                        <span>{vehicle.transmision}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Fuel className="w-3.5 h-3.5" />
-                      <span>{vehicle.tipo_combustible}</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-gray-500">
-                      <MapPin className="w-3.5 h-3.5" />
-                      <span className="line-clamp-1">
-                        {vehicle.ciudad_nombre}, {vehicle.region_nombre}
+                    )}
+
+                    <div className="absolute top-1.5 left-1.5 md:top-2 md:left-2 flex gap-1.5">
+                      <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-white/90 backdrop-blur-sm rounded text-xs font-semibold text-gray-900">
+                        {vehicle.ano}
                       </span>
+                      {distance !== undefined && (
+                        <span className="px-1.5 py-0.5 md:px-2 md:py-1 bg-green-500/90 backdrop-blur-sm rounded text-xs font-semibold text-white flex items-center gap-1">
+                          <Navigation className="w-3 h-3" />
+                          {formatDistance(distance)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <button className="w-full flex items-center justify-center gap-1.5 md:gap-2 bg-gray-900 text-white py-2 text-xs md:text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
-                    <Eye className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                    Ver Detalles
-                  </button>
+                  <div className="p-3 md:p-4">
+                    <h3 className="font-bold text-gray-900 mb-1 line-clamp-1 text-sm md:text-base">
+                      {vehicle.marca} {vehicle.modelo}
+                    </h3>
+                    <p className="text-lg md:text-xl font-bold text-gray-900 mb-2 md:mb-3">
+                      {formatPrice(vehicle.precio)}
+                    </p>
+
+                    <div className="space-y-1.5 md:space-y-2 text-xs text-gray-600 mb-3 md:mb-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          <Gauge className="w-3.5 h-3.5" />
+                          <span>{vehicle.kilometraje.toLocaleString()} km</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Cog className="w-3.5 h-3.5" />
+                          <span>{vehicle.transmision}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Fuel className="w-3.5 h-3.5" />
+                        <span>{vehicle.tipo_combustible}</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-gray-500">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="line-clamp-1">
+                          {vehicle.ciudad_nombre}, {vehicle.region_nombre}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button className="w-full flex items-center justify-center gap-1.5 md:gap-2 bg-gray-900 text-white py-2 text-xs md:text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors">
+                      <Eye className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      Ver Detalles
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

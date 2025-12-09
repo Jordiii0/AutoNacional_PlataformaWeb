@@ -20,6 +20,7 @@ import {
   FileText,
   Save,
   ImageIcon,
+  Droplets, // ✅ Icono para consumo
 } from "lucide-react";
 
 interface VehicleFormData {
@@ -32,6 +33,7 @@ interface VehicleFormData {
   estado_vehiculo: string;
   descripcion: string;
   cilindrada: string;
+  consumo: string; // ✅ Campo agregado
   tipo_vehiculo_id: string;
   tipo_combustible_id: string;
   region_id: string;
@@ -78,6 +80,7 @@ export default function PublicationPage() {
     estado_vehiculo: "",
     descripcion: "",
     cilindrada: "",
+    consumo: "", // ✅ Estado inicial
     tipo_vehiculo_id: "",
     tipo_combustible_id: "",
     region_id: "",
@@ -325,6 +328,11 @@ export default function PublicationPage() {
       const precioFloat = parseFloat(vehicleData.precio);
       const kilometrajeFloat = parseFloat(vehicleData.kilometraje);
       const cilindradaInt = parseInt(vehicleData.cilindrada);
+      
+      // ✅ Procesar consumo (opcional)
+      const consumoFloat = vehicleData.consumo 
+        ? parseFloat(vehicleData.consumo) 
+        : null;
 
       if (
         isNaN(regionIdInt) ||
@@ -354,6 +362,7 @@ export default function PublicationPage() {
           estado_vehiculo: vehicleData.estado_vehiculo,
           descripcion: vehicleData.descripcion.trim(),
           cilindrada: cilindradaInt,
+          consumo: consumoFloat, // ✅ Campo agregado al insert
           tipo_vehiculo_id: tipoVehiculoInt,
           tipo_combustible_id: tipoCombustibleInt,
           region_id: regionIdInt,
@@ -621,6 +630,28 @@ export default function PublicationPage() {
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
                     placeholder="1800"
                     min="0"
+                  />
+                </div>
+
+                {/* ✅ Campo de consumo agregado */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    Consumo (km/l) <span className="text-gray-500">(opcional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={vehicleData.consumo}
+                    onChange={(e) =>
+                      setVehicleData({
+                        ...vehicleData,
+                        consumo: e.target.value,
+                      })
+                    }
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                    placeholder="12.5"
+                    min="0"
+                    max="999.99"
                   />
                 </div>
 

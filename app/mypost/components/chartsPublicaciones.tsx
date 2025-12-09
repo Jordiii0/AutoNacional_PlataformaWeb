@@ -23,7 +23,6 @@ interface PublicacionRow {
 function formatYM(dateString: string) {
     const date = new Date(dateString);
     const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-    // Formato: Mes 'AA (e.g., Ene '25)
     return `${meses[date.getMonth()]} '${date.getFullYear().toString().slice(2)}`;
 }
 
@@ -49,11 +48,10 @@ export default function ChartsPublicaciones({ usuarioId, empresaId, isBusiness }
             
             // 2. Consultar Supabase
             const { data: vehiculos, error: dbError } = await supabase
-                .from("vehiculo") // Consultamos la tabla de vehículos
+                .from("vehiculo")
                 .select("created_at")
                 .match(match)
-                .order('created_at', { ascending: true }) as { data: PublicacionRow[] | null, error: any | null }; // Tipado forzado para la desestructuración
-
+                .order('created_at', { ascending: true }) as { data: PublicacionRow[] | null, error: any | null };
 
             if (dbError) {
                 setError("Error al cargar datos: " + dbError.message);
@@ -68,17 +66,12 @@ export default function ChartsPublicaciones({ usuarioId, empresaId, isBusiness }
                 countsMap[key] = (countsMap[key] || 0) + 1;
             });
 
-            // 4. Llenar los 6 últimos meses (incluyendo meses con 0 publicaciones)
+            // 4. Llenar los 6 últimos meses
             const arr: PublicacionStat[] = [];
             const now = new Date();
             for (let i = 5; i >= 0; i--) {
-                // Retrocede 'i' meses y establece el día 1
                 const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                
-                // Formatea la clave para buscar en countsMap
                 const key = formatYM(d.toISOString());
-                
-                // Agrega al array, usando 0 si el mes no tiene publicaciones
                 arr.push({ month: key, count: countsMap[key] || 0 });
             }
 
@@ -95,27 +88,35 @@ export default function ChartsPublicaciones({ usuarioId, empresaId, isBusiness }
 
     if (loading) {
         return (
-            <div className="h-64 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-                <p className="ml-3 text-gray-500">Cargando historial de publicaciones...</p>
+            <div className="h-48 sm:h-56 md:h-64 flex flex-col sm:flex-row items-center justify-center p-4">
+                <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600 animate-spin" />
+                <p className="mt-2 sm:mt-0 sm:ml-3 text-xs sm:text-sm text-gray-500 text-center">
+                    Cargando historial...
+                </p>
             </div>
         );
     }
+
     if (error) {
         return (
-            <div className="h-64 flex flex-col items-center justify-center p-4 text-center text-red-600 bg-red-50 border border-red-200 rounded-lg">
-                <AlertCircle className="w-8 h-8 mb-2" />
-                <p className="text-sm font-medium">{error}</p>
+            <div className="h-48 sm:h-56 md:h-64 flex flex-col items-center justify-center p-3 sm:p-4 text-center text-red-600 bg-red-50 border border-red-200 rounded-lg">
+                <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2" />
+                <p className="text-xs sm:text-sm font-medium px-2">{error}</p>
             </div>
         );
     }
     
     const totalPublicaciones = data.reduce((sum, item) => sum + item.count, 0);
+    
     if (totalPublicaciones === 0) {
         return (
-            <div className="h-64 flex flex-col items-center justify-center p-4 text-center text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="font-semibold">No hay publicaciones registradas en los últimos 6 meses.</p>
-                <p className="text-sm mt-1">¡Publica un vehículo para empezar a ver tu historial!</p>
+            <div className="h-48 sm:h-56 md:h-64 flex flex-col items-center justify-center p-3 sm:p-4 text-center text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm sm:text-base font-semibold">
+                    No hay publicaciones registradas
+                </p>
+                <p className="text-xs sm:text-sm mt-1 px-2">
+                    ¡Publica un vehículo para empezar a ver tu historial!
+                </p>
             </div>
         );
     }
@@ -123,20 +124,56 @@ export default function ChartsPublicaciones({ usuarioId, empresaId, isBusiness }
     // --- Renderizado del Gráfico ---
 
     return (
-        <div className="h-64 w-full p-4 bg-white rounded-lg shadow-md border border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
+        <div className="h-48 sm:h-56 md:h-64 w-full p-3 sm:p-4 md:p-5 bg-white rounded-lg shadow-md border border-gray-200">
+            <h3 className="text-sm sm:text-base md:text-lg font-semibold text-gray-800 mb-2 sm:mb-3 md:mb-4">
                 Publicaciones por Mes ({totalPublicaciones} total)
             </h3>
-            <div className="flex items-center justify-center h-40">
+            <div className="flex items-center justify-center h-32 sm:h-36 md:h-40">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                        <XAxis dataKey="month" stroke="#6b7280" tickLine={false} axisLine={false} />
-                        <YAxis allowDecimals={false} stroke="#6b7280" tickLine={false} axisLine={false} />
+                    <BarChart 
+                        data={data} 
+                        margin={{ 
+                            top: 5, 
+                            right: 10, 
+                            left: -10, 
+                            bottom: 5 
+                        }}
+                    >
+                        <XAxis 
+                            dataKey="month" 
+                            stroke="#6b7280" 
+                            tickLine={false} 
+                            axisLine={false}
+                            style={{ fontSize: '10px' }}
+                            angle={-45}
+                            textAnchor="end"
+                            height={40}
+                        />
+                        <YAxis 
+                            allowDecimals={false} 
+                            stroke="#6b7280" 
+                            tickLine={false} 
+                            axisLine={false}
+                            style={{ fontSize: '10px' }}
+                            width={30}
+                        />
                         <Tooltip 
                             cursor={{ fill: '#d1d5db', opacity: 0.5 }} 
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}
+                            contentStyle={{ 
+                                borderRadius: '8px', 
+                                border: 'none', 
+                                boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                                fontSize: '12px',
+                                padding: '8px'
+                            }}
                         />
-                        <Bar dataKey="count" fill="#8b5cf6" name="Publicaciones" radius={[4, 4, 0, 0]} />
+                        <Bar 
+                            dataKey="count" 
+                            fill="#8b5cf6" 
+                            name="Publicaciones" 
+                            radius={[4, 4, 0, 0]}
+                            maxBarSize={50}
+                        />
                     </BarChart>
                 </ResponsiveContainer>
             </div>

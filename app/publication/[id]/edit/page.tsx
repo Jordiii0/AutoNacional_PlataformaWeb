@@ -20,6 +20,7 @@ import {
   CheckCircle,
   AlertCircle,
   MapPin,
+  Droplets, // ✅ Icono para consumo
 } from "lucide-react";
 
 interface VehicleFormData {
@@ -32,6 +33,7 @@ interface VehicleFormData {
   estado_vehiculo: string;
   descripcion: string;
   cilindrada: string;
+  consumo: string; // ✅ Campo agregado
   tipo_vehiculo_id: string;
   tipo_combustible_id: string;
   region_id: string;
@@ -78,6 +80,7 @@ export default function EditPublicationPage() {
     estado_vehiculo: "",
     descripcion: "",
     cilindrada: "",
+    consumo: "", // ✅ Estado inicial
     tipo_vehiculo_id: "",
     tipo_combustible_id: "",
     region_id: "",
@@ -211,6 +214,7 @@ export default function EditPublicationPage() {
         estado_vehiculo: vehiculoData.estado_vehiculo || "",
         descripcion: vehiculoData.descripcion || "",
         cilindrada: vehiculoData.cilindrada?.toString() || "",
+        consumo: vehiculoData.consumo?.toString() || "", // ✅ Cargar consumo existente
         tipo_vehiculo_id: vehiculoData.tipo_vehiculo_id?.toString() || "",
         tipo_combustible_id: vehiculoData.tipo_combustible_id?.toString() || "",
         region_id: vehiculoData.region_id?.toString() || "",
@@ -316,6 +320,11 @@ export default function EditPublicationPage() {
     setSaving(true);
 
     try {
+      // ✅ Procesar consumo (opcional)
+      const consumoFloat = vehicleData.consumo 
+        ? parseFloat(vehicleData.consumo) 
+        : null;
+
       const { error: vehicleError } = await supabase
         .from("vehiculo")
         .update({
@@ -328,6 +337,7 @@ export default function EditPublicationPage() {
           estado_vehiculo: vehicleData.estado_vehiculo,
           descripcion: vehicleData.descripcion.trim(),
           cilindrada: parseInt(vehicleData.cilindrada),
+          consumo: consumoFloat, // ✅ Actualizar consumo
           tipo_vehiculo_id: parseInt(vehicleData.tipo_vehiculo_id),
           tipo_combustible_id: parseInt(vehicleData.tipo_combustible_id),
           region_id: parseInt(vehicleData.region_id),
@@ -641,6 +651,24 @@ export default function EditPublicationPage() {
                     value={vehicleData.cilindrada}
                     onChange={handleChange}
                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                  />
+                </div>
+
+                {/* ✅ Campo de consumo agregado */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                    Consumo (km/l) <span className="text-gray-500">(opcional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="consumo"
+                    value={vehicleData.consumo}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                    placeholder="12.5"
+                    min="0"
+                    max="999.99"
                   />
                 </div>
 

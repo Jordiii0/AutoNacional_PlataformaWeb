@@ -2,15 +2,18 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { Menu, X, ChevronDown, LogIn, UserCircle, Shield } from "lucide-react";
+import { Menu, X, ChevronDown, LogIn, UserCircle, Shield, LogOut } from "lucide-react";
 import { Car } from "lucide-react";
 
 export default function Header() {
+  const router = useRouter();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [profileRoute, setProfileRoute] = useState("/profile");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [userInfo, setUserInfo] = useState<{
     name?: string;
     accountType?: "user" | "business" | "admin";
@@ -89,6 +92,21 @@ export default function Header() {
     }
   };
 
+  // ✅ Función para cerrar sesión
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setIsAuthenticated(false);
+      setUserInfo(null);
+      setShowProfileMenu(false);
+      setIsMobileOpen(false);
+      router.push("/");
+      router.refresh();
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+    }
+  };
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
@@ -161,6 +179,24 @@ export default function Header() {
     };
   }, []);
 
+  // ✅ Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest("#profile-dropdown")) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    if (showProfileMenu) {
+      document.addEventListener("click", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, [showProfileMenu]);
+
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-300 ${
@@ -230,11 +266,12 @@ export default function Header() {
               </Link>
             )}
 
-            {/* Profile/Login Button - Desktop */}
+            {/* Profile/Login Button - Desktop con Dropdown */}
             {!loading && isAuthenticated ? (
-              <Link href={profileRoute}>
-                <div
-                  className={`hidden lg:flex items-center space-x-2 px-4 py-2 rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 group relative ${
+              <div className="relative hidden lg:block" id="profile-dropdown">
+                <button
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl hover:shadow-lg hover:scale-105 transition-all duration-200 group relative ${
                     userInfo?.accountType === "admin"
                       ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white"
                       : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
@@ -261,11 +298,45 @@ export default function Header() {
                       </span>
                     )}
                   </div>
-                </div>
-              </Link>
+                  <ChevronDown
+                    className={`w-4 h-4 transition-transform ${
+                      showProfileMenu ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {/* Dropdown Menu */}
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 animate-in slide-in-from-top-2 duration-200">
+                    <Link
+                      href={profileRoute}
+                      onClick={() => setShowProfileMenu(false)}
+                    >
+                      <div className="flex items-center space-x-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer">
+                        <UserCircle className="w-5 h-5 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-700">
+                          Ver Perfil
+                        </span>
+                      </div>
+                    </Link>
+
+                    <div className="border-t border-gray-100 my-1"></div>
+
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center space-x-3 px-4 py-3 hover:bg-red-50 transition-colors text-left group"
+                    >
+                      <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600" />
+                      <span className="text-sm font-medium text-gray-700 group-hover:text-red-600">
+                        Cerrar Sesión
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
-              <Link href="/login">
-                <div className="hidden lg:flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 hover:scale-105 transition-all duration-200 group">
+              <Link href="/login" className="hidden lg:block">
+                <div className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 hover:scale-105 transition-all duration-200 group">
                   <LogIn className="w-5 h-5" />
                   <span className="text-sm font-semibold">Iniciar Sesión</span>
                 </div>
@@ -333,43 +404,57 @@ export default function Header() {
 
               <div className="pt-4 mt-4 border-t border-gray-100">
                 {isAuthenticated ? (
-                  <Link
-                    href={profileRoute}
-                    onClick={() => setIsMobileOpen(false)}
-                  >
-                    <div
-                      className={`flex items-center justify-between px-4 py-3 rounded-lg hover:shadow-lg transition-all font-semibold ${
-                        userInfo?.accountType === "admin"
-                          ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white"
-                          : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
-                      }`}
+                  <>
+                    <Link
+                      href={profileRoute}
+                      onClick={() => setIsMobileOpen(false)}
+                    >
+                      <div
+                        className={`flex items-center justify-between px-4 py-3 rounded-lg hover:shadow-lg transition-all font-semibold mb-2 ${
+                          userInfo?.accountType === "admin"
+                            ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white"
+                            : "bg-gradient-to-r from-indigo-600 to-purple-600 text-white"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="relative">
+                            {userInfo?.accountType === "admin" ? (
+                              <Shield className="w-5 h-5" />
+                            ) : (
+                              <UserCircle className="w-5 h-5" />
+                            )}
+                            <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full border border-white"></div>
+                          </div>
+                          <div className="flex flex-col items-start">
+                            <span>{userInfo?.name || "Mi Perfil"}</span>
+                            {userInfo?.accountType === "business" && (
+                              <span className="text-xs opacity-90">
+                                Cuenta Empresa
+                              </span>
+                            )}
+                            {userInfo?.accountType === "admin" && (
+                              <span className="text-xs opacity-90">
+                                Administrador
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronDown className="w-4 h-4 -rotate-90" />
+                      </div>
+                    </Link>
+
+                    {/* ✅ Botón Cerrar Sesión - Móvil */}
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center justify-between px-4 py-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all font-semibold"
                     >
                       <div className="flex items-center space-x-3">
-                        <div className="relative">
-                          {userInfo?.accountType === "admin" ? (
-                            <Shield className="w-5 h-5" />
-                          ) : (
-                            <UserCircle className="w-5 h-5" />
-                          )}
-                          <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-400 rounded-full border border-white"></div>
-                        </div>
-                        <div className="flex flex-col items-start">
-                          <span>{userInfo?.name || "Mi Perfil"}</span>
-                          {userInfo?.accountType === "business" && (
-                            <span className="text-xs opacity-90">
-                              Cuenta Empresa
-                            </span>
-                          )}
-                          {userInfo?.accountType === "admin" && (
-                            <span className="text-xs opacity-90">
-                              Administrador
-                            </span>
-                          )}
-                        </div>
+                        <LogOut className="w-5 h-5" />
+                        <span>Cerrar Sesión</span>
                       </div>
                       <ChevronDown className="w-4 h-4 -rotate-90" />
-                    </div>
-                  </Link>
+                    </button>
+                  </>
                 ) : (
                   <Link href="/login" onClick={() => setIsMobileOpen(false)}>
                     <div className="flex items-center justify-between px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold">

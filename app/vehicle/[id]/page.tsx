@@ -23,6 +23,9 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Droplets,
+  FileText,
+  MessageCircle,
 } from "lucide-react";
 
 // --- INTERFACES ---
@@ -36,6 +39,7 @@ interface SellerProfile {
   ciudad?: string;
   region_nombre?: string;
   tipo: "usuario" | "empresa";
+  usuario_id?: string; // ✅ ID del usuario dueño (para empresas)
 }
 
 interface Company {
@@ -43,6 +47,7 @@ interface Company {
   nombre_comercial: string;
   telefono: string | null;
   correo_electronico: string | null;
+  usuario_id: string; // ✅ Agregado
 }
 
 interface Vehicle {
@@ -55,6 +60,7 @@ interface Vehicle {
   transmision: string;
   descripcion: string;
   cilindrada: number;
+  consumo?: number | null;
   created_at: string;
   usuario_id: string | null;
   empresa_id: string | null;
@@ -96,6 +102,7 @@ export default function VehicleDetailPage() {
       checkFavorite();
     }
   }, [vehicleId]);
+
 
   const fetchVehicle = async () => {
     try {
@@ -148,6 +155,7 @@ export default function VehicleDetailPage() {
               ciudad: city?.nombre_ciudad || "Desconocida",
               region_nombre: regionMap.get(userData.region_id) || "Desconocida",
               tipo: "usuario",
+              usuario_id: userData.id, // ✅ Para usuarios normales, es el mismo
             };
           }
         } catch (error) {
@@ -176,6 +184,7 @@ export default function VehicleDetailPage() {
               region_nombre:
                 regionMap.get(companyData.region_id) || "Desconocida",
               tipo: "empresa",
+              usuario_id: companyData.usuario_id, // ✅ ID del dueño de la empresa
             };
           }
         } catch (error) {
@@ -301,6 +310,12 @@ export default function VehicleDetailPage() {
     }
   };
 
+  const handleQuoteRequest = () => {
+    if (vehicle?.empresa_id) {
+      router.push(`/quote/${vehicleId}?empresaId=${vehicle.empresa_id}`);
+    }
+  };
+
   if (loading) return <LoadingScreen />;
   if (!vehicle) return <NotFoundScreen />;
 
@@ -308,7 +323,7 @@ export default function VehicleDetailPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
           <button
             onClick={() => router.back()}
             className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
@@ -320,13 +335,13 @@ export default function VehicleDetailPage() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Title Section */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
             {vehicle.marca} {vehicle.modelo} {vehicle.anio}
           </h1>
-          <p className="text-3xl font-bold text-gray-900 mb-3">
+          <p className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
             {formatPrice(vehicle.precio)}
           </p>
           <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
@@ -356,7 +371,7 @@ export default function VehicleDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Image Gallery */}
             <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
-              <div className="relative h-96 bg-gray-100">
+              <div className="relative h-64 sm:h-96 bg-gray-100">
                 {vehicle.images.length > 0 ? (
                   <>
                     <img
@@ -368,15 +383,15 @@ export default function VehicleDetailPage() {
                       <>
                         <button
                           onClick={prevImage}
-                          className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
+                          className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
                         >
-                          <ChevronLeft className="w-5 h-5 text-gray-900" />
+                          <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5 text-gray-900" />
                         </button>
                         <button
                           onClick={nextImage}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
+                          className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
                         >
-                          <ChevronRight className="w-5 h-5 text-gray-900" />
+                          <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-900" />
                         </button>
                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
                           {vehicle.images.map((_, index) => (
@@ -396,28 +411,28 @@ export default function VehicleDetailPage() {
                   </>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
-                    <Car className="w-16 h-16 text-gray-300" />
+                    <Car className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300" />
                   </div>
                 )}
               </div>
             </div>
 
             {/* Description */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
+            <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-4">
                 Descripción
               </h2>
-              <p className="text-gray-700 whitespace-pre-line leading-relaxed">
+              <p className="text-sm sm:text-base text-gray-700 whitespace-pre-line leading-relaxed">
                 {vehicle.descripcion || "Sin descripción disponible"}
               </p>
             </div>
 
             {/* Specifications */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
+            <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-4">
                 Especificaciones
               </h2>
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
                 <Spec icon={Calendar} label="Año" value={vehicle.anio} />
                 <Spec
                   icon={Gauge}
@@ -440,6 +455,13 @@ export default function VehicleDetailPage() {
                   value={`${vehicle.cilindrada} cc`}
                 />
                 <Spec icon={Tag} label="Tipo" value={vehicle.tipo_vehiculo} />
+                {vehicle.consumo && (
+                  <Spec
+                    icon={Droplets}
+                    label="Consumo"
+                    value={`${vehicle.consumo} km/l`}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -447,7 +469,7 @@ export default function VehicleDetailPage() {
           {/* Right Column - Sidebar */}
           <div className="lg:col-span-1 space-y-4">
             {/* Seller Card */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6 sticky top-24">
+            <div className="bg-white rounded-xl border border-gray-100 p-4 sm:p-6 sticky top-24">
               <div className="flex items-center gap-2 mb-4">
                 {company ? (
                   <Building className="w-5 h-5 text-gray-600" />
@@ -460,8 +482,8 @@ export default function VehicleDetailPage() {
               </div>
 
               {seller ? (
-                <div className="space-y-4">
-                  <p className="text-lg font-bold text-gray-900">
+                <div className="space-y-3 sm:space-y-4">
+                  <p className="text-base sm:text-lg font-bold text-gray-900">
                     {seller.tipo === "empresa"
                       ? seller.nombre
                       : `${seller.nombre} ${seller.apellido}`}
@@ -479,6 +501,17 @@ export default function VehicleDetailPage() {
                         </p>
                       </div>
                     </div>
+                  )}
+
+                  {/* Botón "Cotiza" - Solo para empresas */}
+                  {vehicle.empresa_id && (
+                    <button
+                      onClick={handleQuoteRequest}
+                      className="w-full bg-blue-600 text-white text-sm font-medium py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Solicitar Cotización
+                    </button>
                   )}
 
                   <button
@@ -603,7 +636,9 @@ const ContactModal = ({ seller, company, onClose }: any) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl border border-gray-100 shadow-xl p-6 max-w-md w-full">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Información de Contacto</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            Información de Contacto
+          </h2>
           <button
             onClick={onClose}
             className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
@@ -646,7 +681,8 @@ const ContactModal = ({ seller, company, onClose }: any) => {
             }}
             className="w-full bg-gray-100 text-gray-900 text-sm font-medium py-3 rounded-lg hover:bg-gray-200 transition-colors"
           >
-            Ver perfil {seller.tipo === "empresa" ? "de la empresa" : "del vendedor"}
+            Ver perfil{" "}
+            {seller.tipo === "empresa" ? "de la empresa" : "del vendedor"}
           </button>
 
           <button
@@ -695,7 +731,9 @@ const ReportModal = ({ vehicleId, onClose }: any) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl border border-gray-100 shadow-xl p-6 max-w-md w-full">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Reportar Publicación</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            Reportar Publicación
+          </h2>
           <button
             onClick={onClose}
             className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
