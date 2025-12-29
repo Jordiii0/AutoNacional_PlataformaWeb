@@ -132,8 +132,8 @@ export default function AboutUs() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {[
               { name: "Javier Veloso", role: "Ing. Informático", image: "/images/team/javier.jpg" },
-              { name: "Tomás Mariscal", role: "Ing. Informático", image: "/images/team/tomas.jpg" },
-              { name: "Matías Pardo", role: "Ing. Informático", image: "/images/team/matias.jpg" },
+              { name: "Tomás Mariscal", role: "Ing. Informático", image: "/images/team/mariscal.jpg" },
+              { name: "Matías Pardo", role: "Ing. Informático", image: "/images/team/pardo.jpg" },
               { name: "Felipe Catalán", role: "Ing. Informático", image: "/images/team/felipe.jpg" },
             ].map((member, index) => (
               <div key={index} className="group">

@@ -1,8 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, User, Building, Search, MapPin, Home, DollarSign, Car } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
+import React, { useState, useEffect } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  User,
+  Building,
+  Search,
+  MapPin,
+  Home,
+  DollarSign,
+  Car,
+} from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 interface Slide {
   image: string;
@@ -31,16 +41,16 @@ const HeroCarousel: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userType, setUserType] = useState<'usuario' | 'empresa' | null>(null);
+  const [userType, setUserType] = useState<"usuario" | "empresa" | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Estados del formulario de búsqueda
   const [searchForm, setSearchForm] = useState({
-    region_id: '',
-    ciudad_id: '',
-    propertyType: '',
-    priceRange: ''
+    region_id: "",
+    ciudad_id: "",
+    propertyType: "",
+    priceRange: "",
   });
 
   // Estados para regiones y ciudades
@@ -52,26 +62,27 @@ const HeroCarousel: React.FC = () => {
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
     totalVehicles: 0,
-    totalCompanies: 0
+    totalCompanies: 0,
   });
   const [loadingStats, setLoadingStats] = useState(true);
 
   const slides: Slide[] = [
     {
-      image: '/images/banner.jpg',
-      title: 'Encuentra Tu Vehículo Perfecto Hoy',
-      subtitle: 'Vehículos disponibles para compra y arriendo en todo el país'
+      image: "/images/banner.jpg",
+      title: "Encuentra Tu Vehículo Perfecto Hoy",
+      subtitle: "Vehículos disponibles para compra y arriendo en todo el país",
     },
     {
-      image: '/images/banner2.jpg',
-      title: 'Ofertas Exclusivas del Mercado',
-      subtitle: 'Descubre las mejores ofertas en vehículos nuevos y usados'
+      image: "/images/banner2.jpg",
+      title: "Ofertas Exclusivas del Mercado",
+      subtitle: "Descubre las mejores ofertas en vehículos nuevos y usados",
     },
     {
-      image: '/images/banner3.jpg',
-      title: 'Vende Tu Vehículo Fácilmente',
-      subtitle: 'Publica tu vehículo de forma rápida y llega a miles de compradores'
-    }
+      image: "/images/banner3.jpg",
+      title: "Vende Tu Vehículo Fácilmente",
+      subtitle:
+        "Publica tu vehículo de forma rápida y llega a miles de compradores",
+    },
   ];
 
   // Cargar regiones al montar el componente
@@ -80,14 +91,14 @@ const HeroCarousel: React.FC = () => {
       try {
         setLoadingLocations(true);
         const { data, error } = await supabase
-          .from('region')
-          .select('id, nombre_region')
-          .order('nombre_region', { ascending: true });
+          .from("region")
+          .select("id, nombre_region")
+          .order("nombre_region", { ascending: true });
 
         if (error) throw error;
         setRegions(data || []);
       } catch (error) {
-        console.error('Error loading regions:', error);
+        console.error("Error loading regions:", error);
       } finally {
         setLoadingLocations(false);
       }
@@ -106,15 +117,15 @@ const HeroCarousel: React.FC = () => {
 
       try {
         const { data, error } = await supabase
-          .from('ciudad')
-          .select('id, nombre_ciudad, region_id')
-          .eq('region_id', parseInt(searchForm.region_id))
-          .order('nombre_ciudad', { ascending: true });
+          .from("ciudad")
+          .select("id, nombre_ciudad, region_id")
+          .eq("region_id", parseInt(searchForm.region_id))
+          .order("nombre_ciudad", { ascending: true });
 
         if (error) throw error;
         setCities(data || []);
       } catch (error) {
-        console.error('Error loading cities:', error);
+        console.error("Error loading cities:", error);
         setCities([]);
       }
     };
@@ -131,26 +142,20 @@ const HeroCarousel: React.FC = () => {
         const [
           { count: usuariosCount },
           { count: empresasCount },
-          { count: vehiculosCount }
+          { count: vehiculosCount },
         ] = await Promise.all([
-          supabase
-            .from('usuario')
-            .select('*', { count: 'exact', head: true }),
-          supabase
-            .from('empresa')
-            .select('*', { count: 'exact', head: true }),
-          supabase
-            .from('vehiculo')
-            .select('*', { count: 'exact', head: true })
+          supabase.from("usuario").select("*", { count: "exact", head: true }),
+          supabase.from("empresa").select("*", { count: "exact", head: true }),
+          supabase.from("vehiculo").select("*", { count: "exact", head: true }),
         ]);
 
         setStats({
           totalUsers: (usuariosCount || 0) + (empresasCount || 0),
           totalVehicles: vehiculosCount || 0,
-          totalCompanies: empresasCount || 0
+          totalCompanies: empresasCount || 0,
         });
       } catch (error) {
-        console.error('Error loading stats:', error);
+        console.error("Error loading stats:", error);
       } finally {
         setLoadingStats(false);
       }
@@ -163,8 +168,10 @@ const HeroCarousel: React.FC = () => {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
         if (!session) {
           setIsLoggedIn(false);
           setUserType(null);
@@ -177,18 +184,18 @@ const HeroCarousel: React.FC = () => {
         setUserId(session.user.id);
 
         const { data: empresaData } = await supabase
-          .from('empresa')
-          .select('id')
-          .eq('usuario_id', session.user.id)
+          .from("empresa")
+          .select("id")
+          .eq("usuario_id", session.user.id)
           .maybeSingle();
 
         if (empresaData) {
-          setUserType('empresa');
+          setUserType("empresa");
         } else {
-          setUserType('usuario');
+          setUserType("usuario");
         }
       } catch (error) {
-        console.error('Error checking session:', error);
+        console.error("Error checking session:", error);
         setIsLoggedIn(false);
         setUserType(null);
         setUserId(null);
@@ -199,7 +206,9 @@ const HeroCarousel: React.FC = () => {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!session) {
         setIsLoggedIn(false);
         setUserType(null);
@@ -211,12 +220,12 @@ const HeroCarousel: React.FC = () => {
       setUserId(session.user.id);
 
       const { data: empresaData } = await supabase
-        .from('empresa')
-        .select('id')
-        .eq('usuario_id', session.user.id)
+        .from("empresa")
+        .select("id")
+        .eq("usuario_id", session.user.id)
         .maybeSingle();
 
-      setUserType(empresaData ? 'empresa' : 'usuario');
+      setUserType(empresaData ? "empresa" : "usuario");
     });
 
     return () => {
@@ -226,7 +235,7 @@ const HeroCarousel: React.FC = () => {
 
   useEffect(() => {
     if (!isAutoPlaying) return;
-    
+
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 5000);
@@ -250,41 +259,41 @@ const HeroCarousel: React.FC = () => {
   };
 
   const getProfileLink = () => {
-    if (!userId) return '/login';
-    if (userType === 'empresa') return `/business-profile/`;
+    if (!userId) return "/login";
+    if (userType === "empresa") return `/business-profile/`;
     return `/profile/`;
   };
 
   const getProfileButtonText = () => {
-    if (userType === 'empresa') return 'Mi Empresa';
-    return 'Mi Perfil';
+    if (userType === "empresa") return "Mi Empresa";
+    return "Mi Perfil";
   };
 
   const getProfileIcon = () => {
-    if (userType === 'empresa') return <Building className="w-4 h-4" />;
+    if (userType === "empresa") return <Building className="w-4 h-4" />;
     return <User className="w-4 h-4" />;
   };
 
   // Búsqueda con ciudad_id
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const params = new URLSearchParams();
-    
+
     if (searchForm.ciudad_id) {
-      params.append('ciudad_id', searchForm.ciudad_id);
+      params.append("ciudad_id", searchForm.ciudad_id);
     } else if (searchForm.region_id) {
-      params.append('region_id', searchForm.region_id);
+      params.append("region_id", searchForm.region_id);
     }
-    
+
     if (searchForm.propertyType) {
-      params.append('type', searchForm.propertyType);
+      params.append("type", searchForm.propertyType);
     }
-    
+
     if (searchForm.priceRange) {
-      params.append('price', searchForm.priceRange);
+      params.append("price", searchForm.priceRange);
     }
-    
+
     window.location.href = `/shop?${params.toString()}`;
   };
 
@@ -305,7 +314,7 @@ const HeroCarousel: React.FC = () => {
         <div
           key={index}
           className={`absolute inset-0 transition-opacity duration-1000 ${
-            index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'
+            index === currentSlide ? "opacity-100 z-10" : "opacity-0 z-0"
           }`}
         >
           <div
@@ -330,7 +339,10 @@ const HeroCarousel: React.FC = () => {
             {/* Search Card - Responsivo */}
             <div className="w-full max-w-5xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl p-4 sm:p-6 lg:p-8 animate-fade-in-delay">
               {/* Search Form */}
-              <form onSubmit={handleSearch} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+              <form
+                onSubmit={handleSearch}
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4"
+              >
                 {/* Region */}
                 <div className="relative">
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5 sm:mb-2">
@@ -340,11 +352,13 @@ const HeroCarousel: React.FC = () => {
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                     <select
                       value={searchForm.region_id}
-                      onChange={(e) => setSearchForm({ 
-                        ...searchForm, 
-                        region_id: e.target.value,
-                        ciudad_id: '' 
-                      })}
+                      onChange={(e) =>
+                        setSearchForm({
+                          ...searchForm,
+                          region_id: e.target.value,
+                          ciudad_id: "",
+                        })
+                      }
                       disabled={loadingLocations}
                       className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2.5 sm:py-3.5 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all appearance-none cursor-pointer disabled:opacity-50"
                     >
@@ -367,16 +381,21 @@ const HeroCarousel: React.FC = () => {
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                     <select
                       value={searchForm.ciudad_id}
-                      onChange={(e) => setSearchForm({ ...searchForm, ciudad_id: e.target.value })}
+                      onChange={(e) =>
+                        setSearchForm({
+                          ...searchForm,
+                          ciudad_id: e.target.value,
+                        })
+                      }
                       disabled={!searchForm.region_id || cities.length === 0}
                       className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2.5 sm:py-3.5 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all appearance-none cursor-pointer disabled:opacity-50"
                     >
                       <option value="">
-                        {!searchForm.region_id 
-                          ? 'Selecciona región' 
-                          : cities.length === 0 
-                          ? 'Cargando...'
-                          : 'Todas'}
+                        {!searchForm.region_id
+                          ? "Selecciona región"
+                          : cities.length === 0
+                          ? "Cargando..."
+                          : "Todas"}
                       </option>
                       {cities.map((city) => (
                         <option key={city.id} value={city.id}>
@@ -396,15 +415,34 @@ const HeroCarousel: React.FC = () => {
                     <Car className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                     <select
                       value={searchForm.propertyType}
-                      onChange={(e) => setSearchForm({ ...searchForm, propertyType: e.target.value })}
+                      onChange={(e) =>
+                        setSearchForm({
+                          ...searchForm,
+                          propertyType: e.target.value,
+                        })
+                      }
                       className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2.5 sm:py-3.5 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all appearance-none cursor-pointer"
                     >
                       <option value="">Todos</option>
-                      <option value="sedan">Sedán</option>
-                      <option value="suv">SUV</option>
-                      <option value="pickup">Pickup</option>
-                      <option value="deportivo">Deportivo</option>
-                      <option value="camioneta">Camioneta</option>
+                      <option value="Automóvil">Automóvil</option>
+                      <option value="Camioneta">Camioneta</option>
+                      <option value="Camión">Camión</option>
+                      <option value="Motocicleta">Motocicleta</option>
+                      <option value="Bus">Bus</option>
+                      <option value="SUV">SUV</option>
+                      <option value="Furgón">Furgón</option>
+                      <option value="Van">Van</option>
+                      <option value="Minibus">Minibus</option>
+                      <option value="Tractor">Tractor</option>
+                      <option value="Remolque">Remolque</option>
+                      <option value="Casa Rodante">Casa Rodante</option>
+                      <option value="Cuatrimoto">Cuatrimoto</option>
+                      <option value="Scooter Eléctrico">
+                        Scooter Eléctrico
+                      </option>
+                      <option value="Bicicleta Eléctrica">
+                        Bicicleta Eléctrica
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -418,7 +456,12 @@ const HeroCarousel: React.FC = () => {
                     <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
                     <select
                       value={searchForm.priceRange}
-                      onChange={(e) => setSearchForm({ ...searchForm, priceRange: e.target.value })}
+                      onChange={(e) =>
+                        setSearchForm({
+                          ...searchForm,
+                          priceRange: e.target.value,
+                        })
+                      }
                       className="w-full pl-9 sm:pl-11 pr-3 sm:pr-4 py-2.5 sm:py-3.5 bg-gray-50 border border-gray-200 rounded-lg sm:rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all appearance-none cursor-pointer"
                     >
                       <option value="">Todos</option>
@@ -487,7 +530,9 @@ const HeroCarousel: React.FC = () => {
                         {formatNumber(stats.totalVehicles)}+
                       </h3>
                     )}
-                    <p className="text-xs sm:text-sm text-gray-300">Vehículos</p>
+                    <p className="text-xs sm:text-sm text-gray-300">
+                      Vehículos
+                    </p>
                   </div>
                 </div>
               </div>
@@ -540,8 +585,8 @@ const HeroCarousel: React.FC = () => {
             onClick={() => goToSlide(index)}
             className={`h-2 sm:h-2.5 rounded-full transition-all focus:outline-none ${
               index === currentSlide
-                ? 'w-8 sm:w-10 bg-gray-900'
-                : 'w-2 sm:w-2.5 bg-gray-400 hover:bg-gray-600'
+                ? "w-8 sm:w-10 bg-gray-900"
+                : "w-2 sm:w-2.5 bg-gray-400 hover:bg-gray-600"
             }`}
             aria-label={`Ir a slide ${index + 1}`}
           />

@@ -20,11 +20,27 @@ import {
   Shield,
   Globe,
   FileText,
+  Check,
+  X,
 } from "lucide-react";
 
 interface Region {
   id: number;
   nombre_region: string;
+}
+
+// ✅ NUEVO: Interface para validación de contraseña
+interface PasswordStrength {
+  score: number;
+  label: string;
+  color: string;
+  requirements: {
+    minLength: boolean;
+    hasUpperCase: boolean;
+    hasLowerCase: boolean;
+    hasNumber: boolean;
+    hasSpecial: boolean;
+  };
 }
 
 export default function RegisterEmpresaPage() {
@@ -34,14 +50,14 @@ export default function RegisterEmpresaPage() {
     rut_empresa: "",
     correo_electronico: "",
     telefono: "",
-    direccion: "", // ✅ Nuevo campo
+    direccion: "",
     representante_legal: "",
     rut_representante: "",
-    telefono_representante: "", // ✅ Nuevo campo
+    telefono_representante: "",
     region: "",
     ciudad: "",
-    sitio_web: "", // ✅ Nuevo campo
-    descripcion: "", // ✅ Nuevo campo
+    sitio_web: "",
+    descripcion: "",
     password: "",
     confirmPassword: "",
   });
@@ -52,11 +68,32 @@ export default function RegisterEmpresaPage() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  
+  // ✅ NUEVO: Estados para validación de contraseña
+  const [passwordStrength, setPasswordStrength] = useState<PasswordStrength>({
+    score: 0,
+    label: "",
+    color: "",
+    requirements: {
+      minLength: false,
+      hasUpperCase: false,
+      hasLowerCase: false,
+      hasNumber: false,
+      hasSpecial: false,
+    },
+  });
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
 
   useEffect(() => {
     checkAuth();
     loadRegions();
   }, []);
+
+  // ✅ NUEVO: Actualizar fuerza de contraseña en tiempo real
+  useEffect(() => {
+    const strength = calculatePasswordStrength(registerForm.password);
+    setPasswordStrength(strength);
+  }, [registerForm.password]);
 
   const checkAuth = async () => {
     try {
@@ -82,6 +119,79 @@ export default function RegisterEmpresaPage() {
     } catch (error) {
       console.error("Error loading regions:", error);
     }
+  };
+
+  // ✅ NUEVO: Función para calcular fuerza de contraseña
+  const calculatePasswordStrength = (password: string): PasswordStrength => {
+    const requirements = {
+      minLength: password.length >= 8,
+      hasUpperCase: /[A-Z]/.test(password),
+      hasLowerCase: /[a-z]/.test(password),
+      hasNumber: /\d/.test(password),
+      hasSpecial: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+    };
+
+    const metRequirements = Object.values(requirements).filter(Boolean).length;
+    let score = 0;
+    let label = "";
+    let color = "";
+
+    if (password.length === 0) {
+      return { score: 0, label: "", color: "", requirements };
+    }
+
+    if (metRequirements <= 2) {
+      score = 1;
+      label = "Muy débil";
+      color = "bg-red-500";
+    } else if (metRequirements === 3) {
+      score = 2;
+      label = "Débil";
+      color = "bg-orange-500";
+    } else if (metRequirements === 4) {
+      score = 3;
+      label = "Aceptable";
+      color = "bg-yellow-500";
+    } else if (metRequirements === 5 && password.length >= 8) {
+      score = 4;
+      label = "Fuerte";
+      color = "bg-green-500";
+    }
+
+    if (metRequirements === 5 && password.length >= 12) {
+      score = 5;
+      label = "Muy fuerte";
+      color = "bg-green-600";
+    }
+
+    return { score, label, color, requirements };
+  };
+
+  // ✅ NUEVO: Validación de contraseña segura
+  const validatePassword = (password: string): { valid: boolean; message: string } => {
+    if (password.length < 8) {
+      return { valid: false, message: "La contraseña debe tener al menos 8 caracteres." };
+    }
+
+    const strength = calculatePasswordStrength(password);
+    const metRequirements = Object.values(strength.requirements).filter(Boolean).length;
+
+    if (metRequirements < 4) {
+      return {
+        valid: false,
+        message: "La contraseña debe incluir al menos: mayúsculas, minúsculas, números y caracteres especiales.",
+      };
+    }
+
+    const commonPasswords = [
+      "password", "123456", "12345678", "qwerty", "abc123",
+      "password123", "contraseña", "admin", "letmein", "empresa"
+    ];
+    if (commonPasswords.some(common => password.toLowerCase().includes(common))) {
+      return { valid: false, message: "Contraseña demasiado común. Elige una más única." };
+    }
+
+    return { valid: true, message: "" };
   };
 
   const handleInputChange = (
@@ -143,11 +253,15 @@ export default function RegisterEmpresaPage() {
         setLoading(false);
         return;
       }
-      if (registerForm.password.length < 6) {
-        setErrorMessage("La contraseña debe tener al menos 6 caracteres");
+
+      // ✅ NUEVO: Validación de contraseña segura
+      const passwordValidation = validatePassword(registerForm.password);
+      if (!passwordValidation.valid) {
+        setErrorMessage(passwordValidation.message);
         setLoading(false);
         return;
       }
+
       if (registerForm.password !== registerForm.confirmPassword) {
         setErrorMessage("Las contraseñas no coinciden");
         setLoading(false);
@@ -213,21 +327,20 @@ export default function RegisterEmpresaPage() {
         return;
       }
 
-      // ✅ Insertar empresa con los nuevos campos
       const { error: insertError } = await supabase.from("empresa").insert({
         usuario_id: authData.user.id,
         nombre_comercial: registerForm.nombre_comercial.trim(),
         rut_empresa: registerForm.rut_empresa.trim(),
         correo_electronico: registerForm.correo_electronico.trim(),
         telefono: registerForm.telefono.trim() || null,
-        direccion: registerForm.direccion.trim() || null, // ✅ Nuevo
+        direccion: registerForm.direccion.trim() || null,
         representante_legal: registerForm.representante_legal.trim(),
         rut_representante: registerForm.rut_representante.trim(),
-        telefono_representante: registerForm.telefono_representante.trim() || null, // ✅ Nuevo
+        telefono_representante: registerForm.telefono_representante.trim() || null,
         region_id: regionId,
         ciudad_id: ciudadId,
-        sitio_web: registerForm.sitio_web.trim() || null, // ✅ Nuevo
-        descripcion: registerForm.descripcion.trim() || null, // ✅ Nuevo
+        sitio_web: registerForm.sitio_web.trim() || null,
+        descripcion: registerForm.descripcion.trim() || null,
         validada: false,
         habilitado: true,
       });
@@ -391,7 +504,6 @@ export default function RegisterEmpresaPage() {
                 </div>
               </div>
 
-              {/* ✅ Nuevos campos: Dirección y Sitio Web */}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label
@@ -437,7 +549,6 @@ export default function RegisterEmpresaPage() {
                 </div>
               </div>
 
-              {/* ✅ Nuevo campo: Descripción */}
               <div>
                 <label
                   htmlFor="descripcion"
@@ -509,7 +620,6 @@ export default function RegisterEmpresaPage() {
                 </div>
               </div>
 
-              {/* ✅ Nuevo campo: Teléfono Representante */}
               <div>
                 <label
                   htmlFor="telefono_representante"
@@ -585,7 +695,7 @@ export default function RegisterEmpresaPage() {
               </div>
             </div>
 
-            {/* Seguridad */}
+            {/* ✅ NUEVO: Seguridad con validación mejorada */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
                 <Shield className="w-4 h-4 text-gray-600" />
@@ -593,12 +703,22 @@ export default function RegisterEmpresaPage() {
               </div>
 
               <div>
-                <label
-                  htmlFor="password"
-                  className="block text-xs font-medium text-gray-700 mb-2"
-                >
-                  Contraseña *
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label
+                    htmlFor="password"
+                    className="block text-xs font-medium text-gray-700"
+                  >
+                    Contraseña *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordRequirements(!showPasswordRequirements)}
+                    className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                  >
+                    <Shield className="w-3 h-3" />
+                    Requisitos
+                  </button>
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -607,6 +727,7 @@ export default function RegisterEmpresaPage() {
                     name="password"
                     value={registerForm.password}
                     onChange={handleInputChange}
+                    onFocus={() => setShowPasswordRequirements(true)}
                     placeholder="••••••••"
                     className="w-full pl-9 pr-12 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition"
                     disabled={loading}
@@ -624,7 +745,61 @@ export default function RegisterEmpresaPage() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1.5">Mínimo 6 caracteres</p>
+
+                {/* ✅ NUEVO: Barra de fuerza */}
+                {registerForm.password && (
+                  <div className="mt-2">
+                    <div className="flex gap-1 mb-2">
+                      {[1, 2, 3, 4, 5].map((level) => (
+                        <div
+                          key={level}
+                          className={`h-1.5 flex-1 rounded-full transition-all ${
+                            level <= passwordStrength.score
+                              ? passwordStrength.color
+                              : "bg-gray-200"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    {passwordStrength.label && (
+                      <p className="text-xs font-medium text-gray-600">
+                        Fuerza: <span className={`${passwordStrength.color.replace('bg-', 'text-')}`}>
+                          {passwordStrength.label}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* ✅ NUEVO: Lista de requisitos */}
+                {showPasswordRequirements && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                    <p className="text-xs font-semibold text-gray-700 mb-2">
+                      La contraseña debe incluir:
+                    </p>
+                    {[
+                      { key: 'minLength', label: 'Al menos 8 caracteres' },
+                      { key: 'hasUpperCase', label: 'Una letra mayúscula (A-Z)' },
+                      { key: 'hasLowerCase', label: 'Una letra minúscula (a-z)' },
+                      { key: 'hasNumber', label: 'Un número (0-9)' },
+                      { key: 'hasSpecial', label: 'Un carácter especial (!@#$%...)' },
+                    ].map(({ key, label }) => {
+                      const met = passwordStrength.requirements[key as keyof typeof passwordStrength.requirements];
+                      return (
+                        <div key={key} className="flex items-center gap-2 text-xs">
+                          {met ? (
+                            <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
+                          ) : (
+                            <X className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          )}
+                          <span className={met ? "text-green-700" : "text-gray-600"}>
+                            {label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -659,6 +834,26 @@ export default function RegisterEmpresaPage() {
                     )}
                   </button>
                 </div>
+                {/* ✅ NUEVO: Indicador de coincidencia */}
+                {registerForm.confirmPassword && (
+                  <p className={`text-xs mt-1.5 flex items-center gap-1 ${
+                    registerForm.password === registerForm.confirmPassword
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }`}>
+                    {registerForm.password === registerForm.confirmPassword ? (
+                      <>
+                        <Check className="w-3 h-3" />
+                        Las contraseñas coinciden
+                      </>
+                    ) : (
+                      <>
+                        <X className="w-3 h-3" />
+                        Las contraseñas no coinciden
+                      </>
+                    )}
+                  </p>
+                )}
               </div>
             </div>
 

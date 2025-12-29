@@ -36,6 +36,7 @@ interface VehiclePublication {
   transmision: string;
   tipo_combustible_id: number;
   cilindrada: string;
+  consumo: number | string | null; // ✅ NUEVO
   descripcion: string;
   estado_vehiculo: string;
   oculto: boolean;
@@ -232,6 +233,14 @@ export default function ComparePage() {
     }).format(price);
   };
 
+  // ✅ NUEVO: formateo de consumo (ajusta unidades según tu DB)
+  const formatConsumo = (value: number | string | null | undefined) => {
+    if (value === null || value === undefined || value === "") return "-";
+    const n = typeof value === "string" ? Number(value) : value;
+    if (Number.isFinite(n)) return `${n} km/l`; // <-- cambia a "L/100km" si aplica
+    return String(value);
+  };
+
   const filteredVehicles = vehicles.filter((v) => {
     if (viewMode === "favorites" && !favorites.includes(v.id)) return false;
     if (!searchTerm) return true;
@@ -262,6 +271,8 @@ export default function ComparePage() {
         return vehicle.tipo_combustible?.nombre_combustible || "-";
       case "cilindrada":
         return vehicle.cilindrada || "-";
+      case "consumo": // ✅ NUEVO
+        return formatConsumo(vehicle.consumo);
       case "estado_vehiculo":
         return vehicle.estado_vehiculo;
       default:
@@ -282,18 +293,25 @@ export default function ComparePage() {
             return Number(v.kilometraje);
           case "cilindrada":
             return v.cilindrada ? parseFloat(v.cilindrada) : null;
+          case "consumo": {
+            if (v.consumo === null || v.consumo === undefined || v.consumo === "")
+              return null;
+            const n = typeof v.consumo === "string" ? Number(v.consumo) : v.consumo;
+            return Number.isFinite(n) ? n : null;
+          }
           default:
             return null;
         }
       })
-      .filter((v) => v !== null);
+      .filter((v) => v !== null) as number[];
 
     if (values.length < 2) return "";
 
     const currentValue = selectedVehicles[index];
     if (!currentValue) return "";
 
-    let current: number;
+    let current: number | null = null;
+
     switch (attr) {
       case "precio":
         current = Number(currentValue.precio);
@@ -305,21 +323,37 @@ export default function ComparePage() {
         current = Number(currentValue.kilometraje);
         break;
       case "cilindrada":
-        current = currentValue.cilindrada
-          ? parseFloat(currentValue.cilindrada)
-          : 0;
+        current = currentValue.cilindrada ? parseFloat(currentValue.cilindrada) : null;
         break;
+      case "consumo": {
+        const n =
+          typeof currentValue.consumo === "string"
+            ? Number(currentValue.consumo)
+            : currentValue.consumo;
+        current = Number.isFinite(n as number) ? (n as number) : null;
+        break;
+      }
       default:
         return "";
     }
 
-    const min = Math.min(...(values as number[]));
-    const max = Math.max(...(values as number[]));
+    if (current === null) return "";
 
-    if (attr === "precio" || attr === "kilometraje") {
-      return current === min ? "bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-sm" : "";
-    } else if (attr === "anio" || attr === "cilindrada") {
-      return current === max ? "bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-sm" : "";
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+
+    // ✅ Lógica de “mejor valor”:
+    // - precio, kilometraje, consumo => MENOR es mejor
+    // - anio, cilindrada => MAYOR es mejor
+    if (attr === "precio" || attr === "kilometraje" || attr === "consumo") {
+      return current === min
+        ? "bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-sm"
+        : "";
+    }
+    if (attr === "anio" || attr === "cilindrada") {
+      return current === max
+        ? "bg-gradient-to-br from-green-50 to-emerald-50 border-green-300 shadow-sm"
+        : "";
     }
 
     return "";
@@ -387,7 +421,6 @@ export default function ComparePage() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-12">
         {/* Info Banner */}
         <div className="mb-6 sm:mb-8 p-4 sm:p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl flex items-start gap-3">
@@ -397,12 +430,14 @@ export default function ComparePage() {
               ¿Cómo funciona?
             </h3>
             <p className="text-sm text-blue-700">
-              Selecciona hasta 3 vehículos para ver una comparación detallada de sus características. Los mejores valores se destacarán automáticamente.
+              Selecciona hasta 3 vehículos para ver una comparación detallada de
+              sus características. Los mejores valores se destacarán
+              automáticamente.
             </p>
           </div>
         </div>
 
-        {/* Vehicle Selection Cards - Mejoradas */}
+        {/* Vehicle Selection Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-8 sm:mb-12">
           {selectedVehicles.map((vehicle, index) => (
             <div
@@ -411,7 +446,6 @@ export default function ComparePage() {
             >
               {vehicle ? (
                 <div className="relative">
-                  {/* Image with Gradient Overlay */}
                   <div className="relative h-48 sm:h-56 bg-gradient-to-br from-gray-100 to-gray-50 overflow-hidden">
                     {vehicle.images && vehicle.images.length > 0 ? (
                       <VehicleImageComponent
@@ -424,8 +458,7 @@ export default function ComparePage() {
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    
-                    {/* Remove Button */}
+
                     <button
                       onClick={() => removeVehicle(index)}
                       className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm text-red-600 p-2 rounded-xl hover:bg-white transition-all shadow-lg hover:scale-110 active:scale-95"
@@ -433,13 +466,11 @@ export default function ComparePage() {
                       <X className="w-4 h-4" />
                     </button>
 
-                    {/* Position Badge */}
                     <div className="absolute top-3 left-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-sm text-white text-xs font-bold rounded-xl">
                       #{index + 1}
                     </div>
                   </div>
 
-                  {/* Content */}
                   <div className="p-5">
                     <div className="mb-3">
                       <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1">
@@ -465,6 +496,11 @@ export default function ComparePage() {
                         <Cog className="w-4 h-4 text-gray-400" />
                         <span className="font-medium">{vehicle.transmision}</span>
                       </div>
+                      {/* ✅ NUEVO: consumo también en la tarjeta (opcional pero útil) */}
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Fuel className="w-4 h-4 text-gray-400" />
+                        <span className="font-medium">{formatConsumo(vehicle.consumo)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -479,32 +515,26 @@ export default function ComparePage() {
                   <p className="text-gray-900 font-semibold text-base mb-1">
                     Seleccionar Vehículo {index + 1}
                   </p>
-                  <p className="text-gray-500 text-sm">
-                    Click para elegir
-                  </p>
+                  <p className="text-gray-500 text-sm">Click para elegir</p>
                 </button>
               )}
             </div>
           ))}
         </div>
 
-        {/* Comparison Table - Mejorada */}
+        {/* Comparison Table */}
         {selectedVehicles.some((v) => v !== null) && (
           <div className="bg-white rounded-3xl border-2 border-gray-200 overflow-hidden shadow-xl">
-            {/* Table Header */}
             <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-6 py-5 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Award className="w-6 h-6 text-white" />
-                <h2 className="text-xl font-bold text-white">
-                  Comparación Detallada
-                </h2>
+                <h2 className="text-xl font-bold text-white">Comparación Detallada</h2>
               </div>
               <div className="px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-lg text-white text-sm font-medium">
                 {selectedCount} vehículos
               </div>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gradient-to-br from-gray-50 to-gray-100">
@@ -526,6 +556,7 @@ export default function ComparePage() {
                     ))}
                   </tr>
                 </thead>
+
                 <tbody className="divide-y divide-gray-100">
                   {/* Precio */}
                   <tr className="hover:bg-gray-50/50 transition-colors">
@@ -649,6 +680,36 @@ export default function ComparePage() {
                     ))}
                   </tr>
 
+                  {/* ✅ NUEVO: Consumo */}
+                  <tr className="hover:bg-gray-50/50 transition-colors">
+                    <td className="px-6 py-5 text-sm font-semibold text-gray-900">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-sky-100 to-cyan-100 rounded-lg flex items-center justify-center">
+                          <Fuel className="w-4 h-4 text-sky-700" />
+                        </div>
+                        <span>Consumo</span>
+                      </div>
+                    </td>
+                    {selectedVehicles.map((vehicle, index) => (
+                      <td
+                        key={index}
+                        className={`px-6 py-5 text-center text-sm border-2 border-transparent transition-all ${getHighlightClass(
+                          "consumo",
+                          index
+                        )}`}
+                      >
+                        <span className="font-bold text-gray-900">
+                          {getComparisonValue("consumo", vehicle)}
+                        </span>
+                        {getHighlightClass("consumo", index) && (
+                          <div className="mt-1 flex items-center justify-center">
+                            <TrendingUp className="w-4 h-4 text-green-600" />
+                          </div>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+
                   {/* Transmisión */}
                   <tr className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-5 text-sm font-semibold text-gray-900">
@@ -706,7 +767,7 @@ export default function ComparePage() {
                         )}`}
                       >
                         <span className="font-bold text-gray-900">
-                          {vehicle?.cilindrada || "-"}
+                          {getComparisonValue("cilindrada", vehicle)}
                         </span>
                         {getHighlightClass("cilindrada", index) && (
                           <div className="mt-1 flex items-center justify-center">
@@ -720,7 +781,6 @@ export default function ComparePage() {
               </table>
             </div>
 
-            {/* Legend */}
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-4 border-t-2 border-green-200">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -731,18 +791,17 @@ export default function ComparePage() {
                 </div>
                 <span className="text-green-600">•</span>
                 <span className="text-sm text-green-700">
-                  Precio más bajo, año más nuevo, menor kilometraje, cilindrada más grande
+                  Precio más bajo, año más nuevo, menor kilometraje, menor consumo y cilindrada más grande
                 </span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Vehicle Selector Modal - Mejorado */}
+        {/* Vehicle Selector Modal (sin cambios de lógica) */}
         {showSelector !== null && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
             <div className="bg-white rounded-3xl border-2 border-gray-200 shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col">
-              {/* Modal Header */}
               <div className="bg-gradient-to-r from-gray-900 to-gray-800 px-6 py-5 flex justify-between items-center flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
@@ -768,9 +827,7 @@ export default function ComparePage() {
                 </button>
               </div>
 
-              {/* Modal Content */}
               <div className="p-6 flex-1 overflow-y-auto">
-                {/* View Mode Toggle */}
                 {user && favorites.length > 0 && (
                   <div className="grid grid-cols-2 gap-3 mb-5">
                     <button
@@ -798,7 +855,6 @@ export default function ComparePage() {
                   </div>
                 )}
 
-                {/* Search */}
                 <div className="relative mb-6">
                   <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
@@ -810,7 +866,6 @@ export default function ComparePage() {
                   />
                 </div>
 
-                {/* Empty State */}
                 {viewMode === "favorites" && favorites.length === 0 && (
                   <div className="text-center py-16">
                     <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-4">
@@ -831,7 +886,6 @@ export default function ComparePage() {
                   </div>
                 )}
 
-                {/* Vehicle List */}
                 {(viewMode !== "favorites" || favorites.length > 0) && (
                   <div className="space-y-3">
                     {filteredVehicles.length === 0 ? (
